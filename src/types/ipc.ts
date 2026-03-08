@@ -12,6 +12,7 @@ export interface ClaudeSession {
 
 export interface ElectronAPI {
   createSession: (sessionId: string, cwd: string, resumeSessionId?: string, skipPermissions?: boolean, worktree?: boolean, forkSession?: boolean) => void
+  createShellSession: (sessionId: string, cwd: string) => void
   latestSessionForCwd: (cwd: string) => Promise<string | null>
   writeSession: (sessionId: string, data: string) => void
   resizeSession: (sessionId: string, cols: number, rows: number) => void

@@ -4,9 +4,10 @@ import { useTerminal, TerminalHandle } from '../hooks/useTerminal'
 interface TerminalViewProps {
   sessionId: string
   isActive: boolean
+  isShell?: boolean
 }
 
-export function TerminalView({ sessionId, isActive }: TerminalViewProps) {
+export function TerminalView({ sessionId, isActive, isShell }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const handleRef = useRef<TerminalHandle | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -23,7 +24,7 @@ export function TerminalView({ sessionId, isActive }: TerminalViewProps) {
     setSearchQuery('')
   }, [])
 
-  useTerminal(sessionId, containerRef, openSearch, handleRef)
+  useTerminal(sessionId, containerRef, openSearch, handleRef, isShell)
 
   // Only handle search keys when this tab is active
   useEffect(() => {

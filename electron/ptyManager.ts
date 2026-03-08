@@ -52,6 +52,35 @@ export function resizeSession(sessionId: string, cols: number, rows: number) {
   }
 }
 
+export function createShellSession(
+  sessionId: string,
+  cwd: string,
+  onData: (data: string) => void,
+  onExit: () => void
+) {
+  const shell = process.env.SHELL || '/bin/zsh'
+  let term: IPty
+  try {
+    term = pty.spawn(shell, [], {
+      name: 'xterm-256color',
+      cols: 80,
+      rows: 24,
+      cwd,
+      env: { ...process.env } as Record<string, string>,
+    })
+  } catch (err) {
+    console.error('[ptyManager] shell spawn failed:', err)
+    onExit()
+    return
+  }
+  term.onData(onData)
+  term.onExit(() => {
+    sessions.delete(sessionId)
+    onExit()
+  })
+  sessions.set(sessionId, term)
+}
+
 export function killSession(sessionId: string) {
   const term = sessions.get(sessionId)
   if (term) {

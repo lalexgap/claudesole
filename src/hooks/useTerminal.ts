@@ -15,6 +15,7 @@ export function useTerminal(
   containerRef: React.RefObject<HTMLDivElement>,
   onCmdF: () => void,
   handleRef: React.MutableRefObject<TerminalHandle | null>,
+  isShell = false,
 ) {
   const markRunning = useSessionsStore((s) => s.markRunning)
   const markWaiting = useSessionsStore((s) => s.markWaiting)
@@ -100,6 +101,7 @@ export function useTerminal(
       idleTimerRef.current = setTimeout(() => {
         markWaiting(id)
         const shouldNotify =
+          !isShell &&
           claudeRespondedRef.current &&
           !notifiedIdleRef.current &&
           !document.hasFocus() &&

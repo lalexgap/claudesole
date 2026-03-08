@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import path from 'path'
-import { createSession, writeToSession, resizeSession, killSession } from './ptyManager'
+import { createSession, createShellSession, writeToSession, resizeSession, killSession } from './ptyManager'
 import { listClaudeSessions, latestSessionIdForCwd, getUsageForCwd } from './sessionManager'
 
 function createWindow() {
@@ -31,6 +31,14 @@ function createWindow() {
 
   ipcMain.on('pty:create', (_event, { sessionId, cwd, resumeSessionId, skipPermissions, worktree, forkSession }: { sessionId: string; cwd: string; resumeSessionId?: string; skipPermissions?: boolean; worktree?: boolean; forkSession?: boolean }) => {
     createSession(sessionId, cwd, resumeSessionId ?? null, skipPermissions ?? true, worktree ?? false, forkSession ?? false, (data) => {
+      win.webContents.send('pty:data', { sessionId, data })
+    }, () => {
+      win.webContents.send('pty:exit', { sessionId })
+    })
+  })
+
+  ipcMain.on('pty:createShell', (_event, { sessionId, cwd }: { sessionId: string; cwd: string }) => {
+    createShellSession(sessionId, cwd, (data) => {
       win.webContents.send('pty:data', { sessionId, data })
     }, () => {
       win.webContents.send('pty:exit', { sessionId })

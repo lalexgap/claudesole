@@ -23,9 +23,9 @@ export default function App() {
     if (sessions.length === 0) setShowModal(true)
   }, [])
 
-  // Dock badge
+  // Dock badge — only Claude sessions (shell idle is not actionable)
   useEffect(() => {
-    const waiting = sessions.filter(s => s.status === 'waiting').length
+    const waiting = sessions.filter(s => s.type === 'claude' && s.status === 'waiting').length
     window.electronAPI?.setBadgeCount?.(waiting)
   }, [sessions])
 
@@ -58,6 +58,14 @@ export default function App() {
     }
     window.electronAPI.killSession(id)
     removeSession(id)
+  }
+
+  const handleNewShellTab = async () => {
+    const active = sessions.find(s => s.id === activeId)
+    const cwd = active?.cwd ?? await window.electronAPI.openDirectory()
+    if (!cwd) return
+    const sessionId = addSession(cwd, '', undefined, undefined, 'shell')
+    window.electronAPI.createShellSession(sessionId, cwd)
   }
 
   const handleForkTab = async (id: string) => {
@@ -127,6 +135,7 @@ export default function App() {
         onSelectTab={setActive}
         onCloseTab={handleCloseTab}
         onNewTab={openModal}
+        onNewShellTab={handleNewShellTab}
         onRenameTab={renameSession}
         onPinTab={togglePin}
         onForkTab={handleForkTab}
@@ -139,7 +148,7 @@ export default function App() {
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {showSidebar && (
           <SessionSidebar
-            sessions={sessions}
+            sessions={sessions.filter(s => s.type === 'claude')}
             activeId={activeId}
             onSelect={setActive}
             onClose={handleCloseTab}
@@ -163,6 +172,7 @@ export default function App() {
               key={session.id}
               sessionId={session.id}
               isActive={session.id === activeId && !showHistory}
+              isShell={session.type === 'shell'}
             />
           ))}
           {showHistory && (

@@ -17,10 +17,17 @@ export function Tab({ session, isActive, onClick, onClose, onRename, onPin, onFo
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const bg = session.status === 'running'
-    ? isActive ? 'rgba(74,222,128,0.18)' : 'rgba(74,222,128,0.13)'
-    : isActive ? 'rgba(248,113,113,0.18)' : 'rgba(248,113,113,0.13)'
-  const borderColor = session.status === 'running' ? 'rgba(74,222,128,0.35)' : 'rgba(248,113,113,0.35)'
+  const isShell = session.type === 'shell'
+  const bg = isShell
+    ? session.status === 'running'
+      ? isActive ? 'rgba(96,165,250,0.18)' : 'rgba(96,165,250,0.13)'
+      : isActive ? 'rgba(100,116,139,0.18)' : 'rgba(100,116,139,0.10)'
+    : session.status === 'running'
+      ? isActive ? 'rgba(74,222,128,0.18)' : 'rgba(74,222,128,0.13)'
+      : isActive ? 'rgba(248,113,113,0.18)' : 'rgba(248,113,113,0.13)'
+  const borderColor = isShell
+    ? session.status === 'running' ? 'rgba(96,165,250,0.35)' : 'rgba(100,116,139,0.35)'
+    : session.status === 'running' ? 'rgba(74,222,128,0.35)' : 'rgba(248,113,113,0.35)'
 
   const startEdit = () => {
     setEditValue(session.label)
@@ -64,6 +71,9 @@ export function Tab({ session, isActive, onClick, onClose, onRename, onPin, onFo
       >
         {session.pinned && (
           <span style={{ fontSize: '9px', color: '#f6c90e', flexShrink: 0, lineHeight: 1 }}>★</span>
+        )}
+        {isShell && (
+          <span style={{ fontSize: '10px', color: '#60a5fa', flexShrink: 0, lineHeight: 1, opacity: 0.8 }}>$</span>
         )}
         {editing ? (
           <input
@@ -115,6 +125,7 @@ export function Tab({ session, isActive, onClick, onClose, onRename, onPin, onFo
           x={ctxMenu.x}
           y={ctxMenu.y}
           isPinned={session.pinned}
+          isShell={isShell}
           onClose={() => setCtxMenu(null)}
           onRename={() => { setCtxMenu(null); startEdit() }}
           onPin={() => { setCtxMenu(null); onPin() }}
@@ -126,8 +137,8 @@ export function Tab({ session, isActive, onClick, onClose, onRename, onPin, onFo
   )
 }
 
-function TabContextMenu({ x, y, isPinned, onClose, onRename, onPin, onFork, onCloseTab }: {
-  x: number; y: number; isPinned: boolean
+function TabContextMenu({ x, y, isPinned, isShell, onClose, onRename, onPin, onFork, onCloseTab }: {
+  x: number; y: number; isPinned: boolean; isShell: boolean
   onClose: () => void; onRename: () => void; onPin: () => void
   onFork: () => void; onCloseTab: (e: React.MouseEvent) => void
 }) {
@@ -156,7 +167,7 @@ function TabContextMenu({ x, y, isPinned, onClose, onRename, onPin, onFork, onCl
     >
       <CtxItem onClick={onRename}>Rename</CtxItem>
       <CtxItem onClick={onPin}>{isPinned ? 'Unpin' : 'Pin'}</CtxItem>
-      <CtxItem onClick={onFork}>Fork (new in same dir)</CtxItem>
+      {!isShell && <CtxItem onClick={onFork}>Fork (new in same dir)</CtxItem>}
       <div style={{ height: '1px', background: '#2a2a2a', margin: '3px 0' }} />
       <CtxItem onClick={onCloseTab} danger>Close tab</CtxItem>
     </div>

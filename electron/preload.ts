@@ -4,6 +4,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createSession: (sessionId: string, cwd: string, resumeSessionId?: string, skipPermissions?: boolean, worktree?: boolean, forkSession?: boolean) =>
     ipcRenderer.send('pty:create', { sessionId, cwd, resumeSessionId, skipPermissions, worktree, forkSession }),
 
+  createShellSession: (sessionId: string, cwd: string) =>
+    ipcRenderer.send('pty:createShell', { sessionId, cwd }),
+
   latestSessionForCwd: (cwd: string): Promise<string | null> =>
     ipcRenderer.invoke('sessions:latestForCwd', cwd),
 

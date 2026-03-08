@@ -8,6 +8,7 @@ interface TabBarProps {
   onSelectTab: (id: string) => void
   onCloseTab: (id: string) => void
   onNewTab: () => void
+  onNewShellTab: () => void
   onRenameTab: (id: string, label: string) => void
   onPinTab: (id: string) => void
   onForkTab: (id: string) => void
@@ -18,7 +19,7 @@ interface TabBarProps {
 }
 
 export function TabBar({
-  sessions, activeId, onSelectTab, onCloseTab, onNewTab,
+  sessions, activeId, onSelectTab, onCloseTab, onNewTab, onNewShellTab,
   onRenameTab, onPinTab, onForkTab, historyOpen, onToggleHistory, sidebarOpen, onToggleSidebar,
 }: TabBarProps) {
   // Pinned sessions always appear first
@@ -70,6 +71,26 @@ export function TabBar({
         title="New session (⌘T)"
       >
         +
+      </button>
+
+      <button
+        onClick={onNewShellTab}
+        style={{
+          WebkitAppRegion: 'no-drag',
+          background: 'none',
+          border: 'none',
+          color: '#555',
+          fontSize: '11px',
+          fontFamily: 'monospace',
+          lineHeight: 1,
+          cursor: 'pointer',
+          padding: '2px 6px',
+          borderRadius: '4px',
+          flexShrink: 0,
+        } as React.CSSProperties}
+        title="New shell tab"
+      >
+        $
       </button>
 
       <div style={{ flex: 1, WebkitAppRegion: 'drag' } as React.CSSProperties} />
