@@ -52,7 +52,7 @@ export function TerminalView({ sessionId, isActive, isShell }: TerminalViewProps
   }
 
   return (
-    <div style={{ position: 'absolute', inset: 0, visibility: isActive ? 'visible' : 'hidden', padding: '8px' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', padding: '8px', boxSizing: 'border-box' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
 
       {showSearch && (

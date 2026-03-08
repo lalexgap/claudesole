@@ -12,6 +12,8 @@ interface TabBarProps {
   onRenameTab: (id: string, label: string) => void
   onPinTab: (id: string) => void
   onForkTab: (id: string) => void
+  onSplitHTab: (id: string) => void
+  onSplitVTab: (id: string) => void
   historyOpen: boolean
   onToggleHistory: () => void
   sidebarOpen: boolean
@@ -20,7 +22,8 @@ interface TabBarProps {
 
 export function TabBar({
   sessions, activeId, onSelectTab, onCloseTab, onNewTab, onNewShellTab,
-  onRenameTab, onPinTab, onForkTab, historyOpen, onToggleHistory, sidebarOpen, onToggleSidebar,
+  onRenameTab, onPinTab, onForkTab, onSplitHTab, onSplitVTab,
+  historyOpen, onToggleHistory, sidebarOpen, onToggleSidebar,
 }: TabBarProps) {
   // Pinned sessions always appear first
   const sorted = [...sessions].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
@@ -51,6 +54,8 @@ export function TabBar({
           onRename={(label) => onRenameTab(session.id, label)}
           onPin={() => onPinTab(session.id)}
           onFork={() => onForkTab(session.id)}
+          onSplitH={() => onSplitHTab(session.id)}
+          onSplitV={() => onSplitVTab(session.id)}
         />
       ))}
 

@@ -9,9 +9,11 @@ interface TabProps {
   onRename: (label: string) => void
   onPin: () => void
   onFork: () => void
+  onSplitH: () => void
+  onSplitV: () => void
 }
 
-export function Tab({ session, isActive, onClick, onClose, onRename, onPin, onFork }: TabProps) {
+export function Tab({ session, isActive, onClick, onClose, onRename, onPin, onFork, onSplitH, onSplitV }: TabProps) {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
@@ -130,6 +132,8 @@ export function Tab({ session, isActive, onClick, onClose, onRename, onPin, onFo
           onRename={() => { setCtxMenu(null); startEdit() }}
           onPin={() => { setCtxMenu(null); onPin() }}
           onFork={() => { setCtxMenu(null); onFork() }}
+          onSplitH={() => { setCtxMenu(null); onSplitH() }}
+          onSplitV={() => { setCtxMenu(null); onSplitV() }}
           onCloseTab={(e) => { setCtxMenu(null); onClose(e) }}
         />
       )}
@@ -137,10 +141,11 @@ export function Tab({ session, isActive, onClick, onClose, onRename, onPin, onFo
   )
 }
 
-function TabContextMenu({ x, y, isPinned, isShell, onClose, onRename, onPin, onFork, onCloseTab }: {
+function TabContextMenu({ x, y, isPinned, isShell, onClose, onRename, onPin, onFork, onSplitH, onSplitV, onCloseTab }: {
   x: number; y: number; isPinned: boolean; isShell: boolean
   onClose: () => void; onRename: () => void; onPin: () => void
-  onFork: () => void; onCloseTab: (e: React.MouseEvent) => void
+  onFork: () => void; onSplitH: () => void; onSplitV: () => void
+  onCloseTab: (e: React.MouseEvent) => void
 }) {
   useEffect(() => {
     const hide = () => onClose()
@@ -168,6 +173,9 @@ function TabContextMenu({ x, y, isPinned, isShell, onClose, onRename, onPin, onF
       <CtxItem onClick={onRename}>Rename</CtxItem>
       <CtxItem onClick={onPin}>{isPinned ? 'Unpin' : 'Pin'}</CtxItem>
       {!isShell && <CtxItem onClick={onFork}>Fork (new in same dir)</CtxItem>}
+      <div style={{ height: '1px', background: '#2a2a2a', margin: '3px 0' }} />
+      <CtxItem onClick={onSplitH}>Split right →</CtxItem>
+      <CtxItem onClick={onSplitV}>Split below ↓</CtxItem>
       <div style={{ height: '1px', background: '#2a2a2a', margin: '3px 0' }} />
       <CtxItem onClick={onCloseTab} danger>Close tab</CtxItem>
     </div>

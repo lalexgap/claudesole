@@ -5,6 +5,7 @@ import { TerminalView } from './components/TerminalView'
 import { NewSessionModal, SessionOpts } from './components/NewSessionModal'
 import { SessionSidebar } from './components/SessionSidebar'
 import { SessionHistoryPanel } from './components/SessionHistoryPanel'
+import { SplitView, PaneNode, splitLeaf, removeFromTree, getLeafIds } from './components/SplitView'
 import { ClaudeSession } from './types/ipc'
 
 export default function App() {
@@ -12,6 +13,8 @@ export default function App() {
   const [showModal, setShowModal] = useState(false)
   const [showSidebar, setShowSidebar] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [paneRoot, setPaneRoot] = useState<PaneNode | null>(null)
+  const [focusedPaneId, setFocusedPaneId] = useState<string | null>(null)
 
   const openModal = () => setShowModal(true)
   const closeModal = () => setShowModal(false)
@@ -58,6 +61,37 @@ export default function App() {
     }
     window.electronAPI.killSession(id)
     removeSession(id)
+    // Remove from split tree
+    setPaneRoot(prev => {
+      if (!prev) return null
+      const next = removeFromTree(prev, id)
+      if (!next || next.type === 'leaf') {
+        // Collapsed to one or zero panes — exit split mode
+        setFocusedPaneId(next?.sessionId ?? null)
+        return null
+      }
+      if (focusedPaneId === id) {
+        setFocusedPaneId(getLeafIds(next)[0] ?? null)
+      }
+      return next
+    })
+  }
+
+  const handleSplit = (id: string, dir: 'h' | 'v') => {
+    const focusedId = paneRoot ? focusedPaneId : activeId
+    if (!focusedId || focusedId === id) return
+    if (paneRoot === null) {
+      setPaneRoot({ type: 'split', dir, ratio: 0.5, first: { type: 'leaf', sessionId: focusedId }, second: { type: 'leaf', sessionId: id } })
+    } else {
+      setPaneRoot(prev => prev ? splitLeaf(prev, focusedId, dir, id) : { type: 'leaf', sessionId: id })
+    }
+    setFocusedPaneId(id)
+    setActive(id)
+  }
+
+  const handlePaneFocus = (id: string) => {
+    setFocusedPaneId(id)
+    setActive(id)
   }
 
   const handleNewShellTab = async () => {
@@ -139,6 +173,8 @@ export default function App() {
         onRenameTab={renameSession}
         onPinTab={togglePin}
         onForkTab={handleForkTab}
+        onSplitHTab={(id) => handleSplit(id, 'h')}
+        onSplitVTab={(id) => handleSplit(id, 'v')}
         historyOpen={showHistory}
         onToggleHistory={toggleHistory}
         sidebarOpen={showSidebar}
@@ -167,14 +203,35 @@ export default function App() {
               Press ⌘T or click + to open a session
             </div>
           )}
-          {sessions.map(session => (
-            <TerminalView
-              key={session.id}
-              sessionId={session.id}
-              isActive={session.id === activeId && !showHistory}
-              isShell={session.type === 'shell'}
-            />
-          ))}
+
+          {paneRoot ? (
+            <>
+              {/* Keep non-visible sessions alive offscreen so xterm state is preserved */}
+              {sessions.filter(s => !getLeafIds(paneRoot).includes(s.id)).map(s => (
+                <div key={s.id} style={{ position: 'absolute', left: '-9999px', top: 0, width: '800px', height: '600px' }}>
+                  <TerminalView sessionId={s.id} isActive={false} isShell={s.type === 'shell'} />
+                </div>
+              ))}
+              {/* Split layout */}
+              <div style={{ position: 'absolute', inset: 0 }}>
+                <SplitView node={paneRoot} sessions={sessions} focusedId={focusedPaneId} onFocus={handlePaneFocus} />
+              </div>
+            </>
+          ) : (
+            sessions.map(session => (
+              <div key={session.id} style={{
+                position: 'absolute', inset: 0,
+                visibility: session.id === activeId && !showHistory ? 'visible' : 'hidden',
+              }}>
+                <TerminalView
+                  sessionId={session.id}
+                  isActive={session.id === activeId && !showHistory}
+                  isShell={session.type === 'shell'}
+                />
+              </div>
+            ))
+          )}
+
           {showHistory && (
             <SessionHistoryPanel
               onResume={handleHistoryResume}
