@@ -30,6 +30,10 @@ else
   fi
   cp "$PNG" "$MASTER"
   rm -rf "$TMP"
+  # qlmanage renders transparent SVG areas as white — remove the white background
+  if command -v magick &>/dev/null; then
+    magick "$MASTER" -fuzz 10% -transparent white "$MASTER"
+  fi
 fi
 
 echo "→ Generating iconset sizes..."

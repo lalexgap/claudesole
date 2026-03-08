@@ -14,11 +14,11 @@
     </filter>
   </defs>
 
-  <!-- Background: dark forest green — full square, macOS applies rounding -->
-  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <!-- Background: dark forest green, clearly not black -->
+  <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
 
   <!-- Subtle inner border -->
-  <rect width="1024" height="1024" fill="none" stroke="rgba(134,239,172,0.08)" stroke-width="2"/>
+  <rect width="1024" height="1024" rx="220" fill="none" stroke="rgba(134,239,172,0.08)" stroke-width="2"/>
 
   <!-- Terminal prompt chevron > with glow -->
   <polyline
