@@ -1,0 +1,188 @@
+import { useState, useEffect } from 'react'
+import { useSessionsStore } from './store/sessions'
+import { TabBar } from './components/TabBar'
+import { TerminalView } from './components/TerminalView'
+import { NewSessionModal, SessionOpts } from './components/NewSessionModal'
+import { SessionSidebar } from './components/SessionSidebar'
+import { SessionHistoryPanel } from './components/SessionHistoryPanel'
+import { ClaudeSession } from './types/ipc'
+
+export default function App() {
+  const { sessions, activeId, addSession, removeSession, setActive, renameSession, togglePin } = useSessionsStore()
+  const [showModal, setShowModal] = useState(false)
+  const [showSidebar, setShowSidebar] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
+
+  const openModal = () => setShowModal(true)
+  const closeModal = () => setShowModal(false)
+  const toggleSidebar = () => setShowSidebar(v => !v)
+  const toggleHistory = () => setShowHistory(v => !v)
+
+  // Auto-open modal on launch
+  useEffect(() => {
+    if (sessions.length === 0) setShowModal(true)
+  }, [])
+
+  // Dock badge
+  useEffect(() => {
+    const waiting = sessions.filter(s => s.status === 'waiting').length
+    window.electronAPI?.setBadgeCount?.(waiting)
+  }, [sessions])
+
+  const handleResume = (session: ClaudeSession, { skipPermissions, worktree }: SessionOpts) => {
+    // Store the Claude session ID so fork can use it later
+    const sessionId = addSession(session.cwd, session.firstPrompt, undefined, session.sessionId)
+    window.electronAPI.createSession(sessionId, session.cwd, session.sessionId, skipPermissions, worktree)
+    closeModal()
+  }
+
+  const handleNewInFolder = (cwd: string, { skipPermissions, worktree }: SessionOpts) => {
+    const sessionId = addSession(cwd)
+    window.electronAPI.createSession(sessionId, cwd, undefined, skipPermissions, worktree)
+    closeModal()
+  }
+
+  const handleBrowse = async ({ skipPermissions, worktree }: SessionOpts) => {
+    const cwd = await window.electronAPI.openDirectory()
+    if (!cwd) return
+    const sessionId = addSession(cwd)
+    window.electronAPI.createSession(sessionId, cwd, undefined, skipPermissions, worktree)
+    closeModal()
+  }
+
+  const handleCloseTab = (id: string) => {
+    const session = sessions.find(s => s.id === id)
+    if (session?.status === 'running') {
+      const ok = window.confirm(`Close "${session.label}"? Claude may still be running.`)
+      if (!ok) return
+    }
+    window.electronAPI.killSession(id)
+    removeSession(id)
+  }
+
+  const handleForkTab = async (id: string) => {
+    const session = sessions.find(s => s.id === id)
+    if (!session) return
+
+    // Use the stored Claude session ID, or find the latest one for this cwd
+    let claudeId = session.claudeSessionId
+    if (!claudeId) {
+      claudeId = await window.electronAPI.latestSessionForCwd(session.cwd) ?? undefined
+    }
+
+    const newId = addSession(session.cwd, session.firstPrompt, session.label)
+    // Pass resumeSessionId + forkSession=true → claude --resume <id> --fork-session
+    window.electronAPI.createSession(newId, session.cwd, claudeId, true, false, true)
+  }
+
+  // History panel: resume session with default opts
+  const handleHistoryResume = (session: ClaudeSession, skipPermissions: boolean) => {
+    const sessionId = addSession(session.cwd, session.firstPrompt, undefined, session.sessionId)
+    window.electronAPI.createSession(sessionId, session.cwd, session.sessionId, skipPermissions, false)
+    setShowHistory(false)
+  }
+
+  // History panel: fork session
+  const handleHistoryFork = (session: ClaudeSession, skipPermissions: boolean) => {
+    const newId = addSession(session.cwd, session.firstPrompt, undefined, session.sessionId)
+    window.electronAPI.createSession(newId, session.cwd, session.sessionId, skipPermissions, false, true)
+    setShowHistory(false)
+  }
+
+  useEffect(() => {
+    if (!window.electronAPI) return
+    return window.electronAPI.onShortcutNewSession(openModal)
+  }, [])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.metaKey) return
+
+      if (e.key === 'b') { e.preventDefault(); toggleSidebar(); return }
+      if (e.key === 'h') { e.preventDefault(); toggleHistory(); return }
+
+      if (e.key === 'w' && !showModal && !showHistory) {
+        e.preventDefault()
+        if (activeId) handleCloseTab(activeId)
+        return
+      }
+
+      const n = parseInt(e.key)
+      if (n >= 1 && n <= 9) {
+        e.preventDefault()
+        const sorted = [...sessions].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+        const target = sorted[n - 1]
+        if (target) setActive(target.id)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [activeId, sessions, showModal, showHistory])
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
+      <TabBar
+        sessions={sessions}
+        activeId={activeId}
+        onSelectTab={setActive}
+        onCloseTab={handleCloseTab}
+        onNewTab={openModal}
+        onRenameTab={renameSession}
+        onPinTab={togglePin}
+        onForkTab={handleForkTab}
+        historyOpen={showHistory}
+        onToggleHistory={toggleHistory}
+        sidebarOpen={showSidebar}
+        onToggleSidebar={toggleSidebar}
+      />
+
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {showSidebar && (
+          <SessionSidebar
+            sessions={sessions}
+            activeId={activeId}
+            onSelect={setActive}
+            onClose={handleCloseTab}
+            onFork={handleForkTab}
+            onNewSession={openModal}
+          />
+        )}
+
+        <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
+          {sessions.length === 0 && !showHistory && (
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#333', fontSize: '14px',
+            }}>
+              Press ⌘T or click + to open a session
+            </div>
+          )}
+          {sessions.map(session => (
+            <TerminalView
+              key={session.id}
+              sessionId={session.id}
+              isActive={session.id === activeId && !showHistory}
+            />
+          ))}
+          {showHistory && (
+            <SessionHistoryPanel
+              onResume={handleHistoryResume}
+              onFork={handleHistoryFork}
+              onClose={() => setShowHistory(false)}
+            />
+          )}
+        </div>
+      </div>
+
+      {showModal && (
+        <NewSessionModal
+          onResume={handleResume}
+          onNewInFolder={handleNewInFolder}
+          onBrowse={handleBrowse}
+          onClose={closeModal}
+        />
+      )}
+    </div>
+  )
+}

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1e1e1e"/>
+      <stop offset="100%" stop-color="#0a0a0a"/>
+    </linearGradient>
+    <linearGradient id="green" x1="240" y1="260" x2="548" y2="764" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6ee7a0"/>
+      <stop offset="100%" stop-color="#22c55e"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
+
+  <!-- Subtle top highlight -->
+  <rect width="1024" height="2" y="0" rx="1" fill="#ffffff" opacity="0.06"/>
+
+  <!-- Terminal prompt chevron > -->
+  <polyline
+    points="240,262 548,512 240,762"
+    fill="none"
+    stroke="url(#green)"
+    stroke-width="90"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Blinking cursor block -->
+  <rect x="608" y="447" width="168" height="130" fill="url(#green)" rx="14"/>
+</svg>
