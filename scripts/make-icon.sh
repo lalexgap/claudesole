@@ -17,7 +17,8 @@ echo "→ Converting SVG to PNG..."
 if command -v rsvg-convert &>/dev/null; then
   rsvg-convert -w 1024 -h 1024 "$SVG" -o "$MASTER"
 elif command -v convert &>/dev/null; then
-  convert -background none -size 1024x1024 "$SVG" "$MASTER"
+  # PNG32: forces 32-bit RGBA output, preventing ImageMagick from writing grayscale
+  convert -background none -size 1024x1024 "$SVG" PNG32:"$MASTER"
 else
   # macOS Quick Look fallback
   TMP=$(mktemp -d)
