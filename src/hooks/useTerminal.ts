@@ -22,6 +22,7 @@ export function useTerminal(
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const notifiedIdleRef = useRef(false)
   const suppressRunningUntil = useRef(0)
+  const claudeRespondedRef = useRef(false) // true only when Claude (not echo) sent data since last idle
   const onCmdFRef = useRef(onCmdF)
   useEffect(() => { onCmdFRef.current = onCmdF })
 
@@ -87,14 +88,24 @@ export function useTerminal(
     const removeDataListener = window.electronAPI.onData((id, data) => {
       if (id !== sessionId) return
       term.write(data)
-      // Only mark running if this isn't echo of user input
-      if (Date.now() > suppressRunningUntil.current) markRunning(id)
-      notifiedIdleRef.current = false
+
+      const isClaudeData = Date.now() > suppressRunningUntil.current
+      if (isClaudeData) {
+        markRunning(id)
+        claudeRespondedRef.current = true
+        notifiedIdleRef.current = false // allow notification when this response finishes
+      }
+
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
       idleTimerRef.current = setTimeout(() => {
         markWaiting(id)
-        // Notify if window is not focused and we haven't already notified for this idle period
-        if (!document.hasFocus() && !notifiedIdleRef.current && Notification.permission === 'granted') {
+        const shouldNotify =
+          claudeRespondedRef.current &&
+          !notifiedIdleRef.current &&
+          !document.hasFocus() &&
+          Notification.permission === 'granted'
+        claudeRespondedRef.current = false
+        if (shouldNotify) {
           const label = useSessionsStore.getState().sessions.find(s => s.id === id)?.label ?? 'Claude'
           new Notification('Claude is waiting', { body: `${label} finished and is waiting for input`, silent: false })
           notifiedIdleRef.current = true
