@@ -16,11 +16,9 @@ echo "→ Converting SVG to PNG..."
 
 if command -v rsvg-convert &>/dev/null; then
   rsvg-convert -w 1024 -h 1024 "$SVG" -o "$MASTER"
-elif command -v magick &>/dev/null; then
-  # ImageMagick v7 — PNG32: forces 32-bit RGBA, preventing grayscale output
-  magick -background none -size 1024x1024 "$SVG" PNG32:"$MASTER"
 else
   # macOS Quick Look — uses WebKit, always renders SVG with correct colors
+  # (ImageMagick does not correctly render SVG gradients/filters)
   TMP=$(mktemp -d)
   qlmanage -t -s 1024 -o "$TMP" "$SVG" >/dev/null 2>&1
   PNG=$(find "$TMP" -name "*.png" | head -1)
