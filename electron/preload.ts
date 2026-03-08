@@ -49,4 +49,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   getSessionUsage: (cwd: string): Promise<{ tokensUsed?: number; model?: string } | null> =>
     ipcRenderer.invoke('sessions:getUsage', cwd),
+
+  getGitInfo: (cwd: string): Promise<{ branch: string | null; isWorktree: boolean } | null> =>
+    ipcRenderer.invoke('git:info', cwd),
 })

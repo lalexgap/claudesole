@@ -24,6 +24,7 @@ export interface ElectronAPI {
   onShortcutNewSession: (callback: () => void) => () => void
   setBadgeCount: (count: number) => void
   getSessionUsage: (cwd: string) => Promise<{ tokensUsed?: number; model?: string } | null>
+  getGitInfo: (cwd: string) => Promise<{ branch: string | null; isWorktree: boolean } | null>
 }
 
 declare global {

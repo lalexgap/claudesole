@@ -14,16 +14,19 @@ interface Props {
 export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, onNewSession }: Props) {
   const [hovered, setHovered] = useState<string | null>(null)
   const [tokensUsed, setTokensUsed] = useState<number | undefined>(undefined)
+  const [gitInfo, setGitInfo] = useState<{ branch: string | null; isWorktree: boolean } | null>(null)
 
   const selectedId = activeId
   const selectedSession = sessions.find(s => s.id === selectedId)
 
   useEffect(() => {
     setTokensUsed(undefined)
+    setGitInfo(null)
     if (!selectedSession?.cwd) return
     window.electronAPI.getSessionUsage(selectedSession.cwd).then(usage => {
       setTokensUsed(usage?.tokensUsed)
     })
+    window.electronAPI.getGitInfo(selectedSession.cwd).then(setGitInfo)
   }, [selectedSession?.id])
 
   return (
@@ -143,6 +146,21 @@ export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, 
           <div style={{ color: '#555', fontSize: '10px', wordBreak: 'break-all', lineHeight: 1.4 }}>
             {selectedSession.cwd}
           </div>
+          {gitInfo && gitInfo.branch && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ color: '#555', fontSize: '10px' }}>⎇</span>
+              <span style={{ color: '#888', fontSize: '10px' }}>{gitInfo.branch}</span>
+              <span style={{
+                fontSize: '8px', color: gitInfo.isWorktree ? '#60a5fa' : '#555',
+                background: gitInfo.isWorktree ? 'rgba(96,165,250,0.12)' : 'rgba(255,255,255,0.05)',
+                border: `1px solid ${gitInfo.isWorktree ? 'rgba(96,165,250,0.3)' : '#2a2a2a'}`,
+                borderRadius: '3px', padding: '1px 4px',
+                textTransform: 'uppercase', letterSpacing: '0.05em',
+              }}>
+                {gitInfo.isWorktree ? 'worktree' : 'main'}
+              </span>
+            </div>
+          )}
           <ContextBar tokensUsed={tokensUsed} compact />
           {selectedSession.firstPrompt && (
             <div style={{

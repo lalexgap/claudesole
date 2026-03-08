@@ -49,11 +49,22 @@ function groupSessions(sessions: ClaudeSession[]): Group[] {
   return groups
 }
 
+function loadFavorites(): Set<string> {
+  try {
+    const stored = localStorage.getItem('claudesole:favorites')
+    if (stored) return new Set(JSON.parse(stored))
+  } catch {}
+  return new Set()
+}
+
 export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
   const [sessions, setSessions] = useState<ClaudeSession[]>([])
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<ClaudeSession | null>(null)
   const [skipPermissions, setSkipPermissions] = useState(true)
+  const [favorites, setFavorites] = useState<Set<string>>(loadFavorites)
+  const [hoveredRow, setHoveredRow] = useState<string | null>(null)
+  const [gitInfo, setGitInfo] = useState<{ branch: string | null; isWorktree: boolean } | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -62,12 +73,29 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
   }, [])
 
   useEffect(() => {
+    setGitInfo(null)
+    if (!selected?.cwd) return
+    window.electronAPI.getGitInfo(selected.cwd).then(setGitInfo)
+  }, [selected?.sessionId])
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.preventDefault(); onClose() }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  const toggleFavorite = (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setFavorites(prev => {
+      const next = new Set(prev)
+      if (next.has(sessionId)) next.delete(sessionId)
+      else next.add(sessionId)
+      localStorage.setItem('claudesole:favorites', JSON.stringify([...next]))
+      return next
+    })
+  }
 
   const q = query.toLowerCase()
   const filtered = sessions.filter(s =>
@@ -78,7 +106,12 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
     s.firstPrompt.toLowerCase().includes(q)
   )
 
-  const groups = groupSessions(filtered)
+  const favSessions = filtered.filter(s => favorites.has(s.sessionId))
+  const nonFavSessions = filtered.filter(s => !favorites.has(s.sessionId))
+  const groups: Group[] = [
+    ...(favSessions.length > 0 ? [{ label: '★ Favorites', sessions: favSessions }] : []),
+    ...groupSessions(nonFavSessions),
+  ]
 
   return (
     <div style={{
@@ -153,38 +186,59 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
               </div>
               {group.sessions.map(session => {
                 const isSelected = selected?.sessionId === session.sessionId
+                const isFav = favorites.has(session.sessionId)
+                const isHovered = hoveredRow === session.sessionId
                 return (
                   <div
                     key={session.sessionId}
                     onClick={() => setSelected(session)}
                     onDoubleClick={() => { onResume(session, skipPermissions) }}
+                    onMouseEnter={() => setHoveredRow(session.sessionId)}
+                    onMouseLeave={() => setHoveredRow(null)}
                     style={{
                       padding: '7px 16px',
                       cursor: 'pointer',
                       background: isSelected ? 'rgba(255,255,255,0.07)' : 'transparent',
                       borderLeft: `2px solid ${isSelected ? '#555' : 'transparent'}`,
+                      display: 'flex', alignItems: 'flex-start', gap: '6px',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                      <span style={{
-                        color: isSelected ? '#e5e5e5' : '#bbb',
-                        fontSize: '13px', fontWeight: 500,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        flex: 1,
-                      }}>
-                        {session.slug || session.projectName}
-                      </span>
-                      <span style={{ color: '#555', fontSize: '11px', flexShrink: 0 }}>
-                        {relativeTime(session.lastActivity)}
-                      </span>
-                    </div>
-                    {(session.latestPrompt || session.firstPrompt) && (
-                      <div style={{
-                        color: '#666', fontSize: '11px', marginTop: '2px',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>
-                        {session.latestPrompt || session.firstPrompt}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                        <span style={{
+                          color: isSelected ? '#e5e5e5' : '#bbb',
+                          fontSize: '13px', fontWeight: 500,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          flex: 1,
+                        }}>
+                          {session.slug || session.projectName}
+                        </span>
+                        <span style={{ color: '#555', fontSize: '11px', flexShrink: 0 }}>
+                          {relativeTime(session.lastActivity)}
+                        </span>
                       </div>
+                      {(session.latestPrompt || session.firstPrompt) && (
+                        <div style={{
+                          color: '#666', fontSize: '11px', marginTop: '2px',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>
+                          {session.latestPrompt || session.firstPrompt}
+                        </div>
+                      )}
+                    </div>
+                    {(isFav || isHovered) && (
+                      <span
+                        onClick={(e) => toggleFavorite(session.sessionId, e)}
+                        title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                        style={{
+                          fontSize: '12px', flexShrink: 0, marginTop: '1px',
+                          color: isFav ? '#f6c90e' : '#444',
+                          cursor: 'pointer', lineHeight: 1,
+                          transition: 'color 0.15s',
+                        }}
+                      >
+                        ★
+                      </span>
                     )}
                   </div>
                 )
@@ -200,18 +254,47 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
             overflowY: 'auto',
             display: 'flex', flexDirection: 'column', gap: '20px',
           }}>
-            <div>
-              <div style={{ color: '#e5e5e5', fontSize: '18px', fontWeight: 600, marginBottom: '4px' }}>
-                {selected.slug || selected.projectName}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: '#e5e5e5', fontSize: '18px', fontWeight: 600, marginBottom: '4px' }}>
+                  {selected.slug || selected.projectName}
+                </div>
+                {selected.slug && (
+                  <div style={{ color: '#666', fontSize: '13px' }}>{selected.projectName}</div>
+                )}
               </div>
-              {selected.slug && (
-                <div style={{ color: '#666', fontSize: '13px' }}>{selected.projectName}</div>
-              )}
+              <span
+                onClick={(e) => toggleFavorite(selected.sessionId, e)}
+                title={favorites.has(selected.sessionId) ? 'Remove from favorites' : 'Add to favorites'}
+                style={{
+                  fontSize: '18px', cursor: 'pointer', lineHeight: 1, marginTop: '2px', flexShrink: 0,
+                  color: favorites.has(selected.sessionId) ? '#f6c90e' : '#333',
+                  transition: 'color 0.15s',
+                }}
+              >
+                ★
+              </span>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <Label>Location</Label>
               <div style={{ color: '#888', fontSize: '12px', wordBreak: 'break-all' }}>{selected.cwd}</div>
+              {gitInfo?.branch && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                  <span style={{ color: '#555', fontSize: '11px' }}>⎇</span>
+                  <span style={{ color: '#888', fontSize: '11px' }}>{gitInfo.branch}</span>
+                  <span style={{
+                    fontSize: '9px',
+                    color: gitInfo.isWorktree ? '#60a5fa' : '#555',
+                    background: gitInfo.isWorktree ? 'rgba(96,165,250,0.12)' : 'rgba(255,255,255,0.05)',
+                    border: `1px solid ${gitInfo.isWorktree ? 'rgba(96,165,250,0.3)' : '#2a2a2a'}`,
+                    borderRadius: '3px', padding: '1px 5px',
+                    textTransform: 'uppercase', letterSpacing: '0.05em',
+                  }}>
+                    {gitInfo.isWorktree ? 'worktree' : 'main'}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
