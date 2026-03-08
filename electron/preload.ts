@@ -43,4 +43,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   setBadgeCount: (count: number) =>
     ipcRenderer.send('app:setBadgeCount', count),
+
+  getSessionUsage: (cwd: string): Promise<{ tokensUsed?: number; model?: string } | null> =>
+    ipcRenderer.invoke('sessions:getUsage', cwd),
 })

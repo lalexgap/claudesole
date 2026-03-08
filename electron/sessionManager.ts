@@ -10,6 +10,8 @@ export interface ClaudeSession {
   lastActivity: number // mtime ms
   firstPrompt: string
   latestPrompt: string
+  tokensUsed?: number
+  model?: string
 }
 
 function extractText(content: unknown): string {
@@ -25,7 +27,7 @@ function extractText(content: unknown): string {
   return ''
 }
 
-function parseFile(filePath: string, fileSize: number): { cwd?: string; slug?: string; firstPrompt?: string; latestPrompt?: string } {
+function parseFile(filePath: string, fileSize: number): { cwd?: string; slug?: string; firstPrompt?: string; latestPrompt?: string; tokensUsed?: number; model?: string } {
   try {
     const HEAD = 16384
     const fd = fs.openSync(filePath, 'r')
@@ -53,69 +55,75 @@ function parseFile(filePath: string, fileSize: number): { cwd?: string; slug?: s
       } catch {}
     }
 
-    // Reverse-chunk scan for the latest user message.
-    // Claude responses can be very long (>64KB), so we scan backwards in
-    // 32KB chunks until we find a user message or exhaust the file.
-    const latestPrompt = findLatestUserPrompt(filePath, fileSize)
+    // Reverse-chunk scan for latest user message + token usage.
+    const { latestPrompt, tokensUsed, model } = findTailData(filePath, fileSize)
 
-    return { cwd, slug, firstPrompt, latestPrompt }
+    return { cwd, slug, firstPrompt, latestPrompt, tokensUsed, model }
   } catch {
     return {}
   }
 }
 
-function findLatestUserPrompt(filePath: string, fileSize: number): string | undefined {
+interface TailData {
+  latestPrompt?: string
+  tokensUsed?: number
+  model?: string
+}
+
+function findTailData(filePath: string, fileSize: number): TailData {
   const CHUNK = 32768
   let pos = fileSize
-  let carry = '' // incomplete line fragment carried between chunks
+  let carry = ''
+  const result: TailData = {}
+
+  const done = () => result.latestPrompt !== undefined && result.tokensUsed !== undefined
+
+  const processLine = (line: string) => {
+    const trimmed = line.trim()
+    if (!trimmed) return
+    try {
+      const obj = JSON.parse(trimmed)
+      if (result.latestPrompt === undefined && obj.type === 'user') {
+        const t = extractText(obj.message?.content)
+        if (t) result.latestPrompt = t
+      }
+      if (result.tokensUsed === undefined && obj.type === 'assistant') {
+        const usage = obj.message?.usage
+        if (usage?.input_tokens !== undefined) {
+          result.tokensUsed = usage.input_tokens as number
+          if (!result.model && obj.message?.model) result.model = obj.message.model as string
+        }
+      }
+    } catch {}
+  }
 
   try {
     const fd = fs.openSync(filePath, 'r')
     try {
-      while (pos > 0) {
+      while (pos > 0 && !done()) {
         const start = Math.max(0, pos - CHUNK)
         const size = pos - start
         const buf = Buffer.alloc(size)
         fs.readSync(fd, buf, 0, size, start)
         pos = start
 
-        // Prepend chunk to any leftover from the previous (later) chunk
         const text = buf.toString('utf-8') + carry
         const lines = text.split('\n')
-
-        // First element may be an incomplete line at the chunk boundary — carry it back
         carry = lines[0]
 
-        // Scan the complete lines in reverse (skip index 0, it's the carry)
         for (let i = lines.length - 1; i >= 1; i--) {
-          const line = lines[i].trim()
-          if (!line) continue
-          try {
-            const obj = JSON.parse(line)
-            if (obj.type === 'user') {
-              const text = extractText(obj.message?.content)
-              if (text) return text
-            }
-          } catch {}
+          processLine(lines[i])
+          if (done()) break
         }
       }
 
-      // Check the final carry (very start of file)
-      if (carry.trim()) {
-        try {
-          const obj = JSON.parse(carry)
-          if (obj.type === 'user') {
-            const text = extractText(obj.message?.content)
-            if (text) return text
-          }
-        } catch {}
-      }
+      if (!done()) processLine(carry)
     } finally {
       fs.closeSync(fd)
     }
   } catch {}
 
-  return undefined
+  return result
 }
 
 export function listClaudeSessions(): ClaudeSession[] {
@@ -156,7 +164,7 @@ export function listClaudeSessions(): ClaudeSession[] {
         continue
       }
 
-      const { cwd, slug, firstPrompt, latestPrompt } = parseFile(filePath, fileSize)
+      const { cwd, slug, firstPrompt, latestPrompt, tokensUsed, model } = parseFile(filePath, fileSize)
       if (!cwd) continue
 
       sessions.push({
@@ -167,6 +175,8 @@ export function listClaudeSessions(): ClaudeSession[] {
         lastActivity: mtime,
         firstPrompt: firstPrompt || '',
         latestPrompt: latestPrompt || '',
+        tokensUsed,
+        model,
       })
     }
   }
@@ -177,4 +187,11 @@ export function listClaudeSessions(): ClaudeSession[] {
 export function latestSessionIdForCwd(cwd: string): string | null {
   const all = listClaudeSessions()
   return all.find(s => s.cwd === cwd)?.sessionId ?? null
+}
+
+export function getUsageForCwd(cwd: string): { tokensUsed?: number; model?: string } | null {
+  const all = listClaudeSessions()
+  const match = all.find(s => s.cwd === cwd)
+  if (!match) return null
+  return { tokensUsed: match.tokensUsed, model: match.model }
 }

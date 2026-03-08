@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { ClaudeSession } from '../types/ipc'
+import { ContextBar } from './ContextBar'
 
 interface Props {
   onResume: (session: ClaudeSession, skipPermissions: boolean) => void
@@ -217,6 +218,10 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
               <Label>Last active</Label>
               <div style={{ color: '#888', fontSize: '12px' }}>{relativeTime(selected.lastActivity)}</div>
             </div>
+
+            {selected.tokensUsed !== undefined && (
+              <ContextBar tokensUsed={selected.tokensUsed} />
+            )}
 
             {selected.firstPrompt && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

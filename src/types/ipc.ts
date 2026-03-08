@@ -6,6 +6,8 @@ export interface ClaudeSession {
   lastActivity: number // mtime ms
   firstPrompt: string
   latestPrompt: string
+  tokensUsed?: number
+  model?: string
 }
 
 export interface ElectronAPI {
@@ -20,6 +22,7 @@ export interface ElectronAPI {
   onExit: (callback: (sessionId: string) => void) => () => void
   onShortcutNewSession: (callback: () => void) => () => void
   setBadgeCount: (count: number) => void
+  getSessionUsage: (cwd: string) => Promise<{ tokensUsed?: number; model?: string } | null>
 }
 
 declare global {

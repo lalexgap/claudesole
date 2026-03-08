@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import path from 'path'
 import { createSession, writeToSession, resizeSession, killSession } from './ptyManager'
-import { listClaudeSessions, latestSessionIdForCwd } from './sessionManager'
+import { listClaudeSessions, latestSessionIdForCwd, getUsageForCwd } from './sessionManager'
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -26,6 +26,8 @@ function createWindow() {
   ipcMain.handle('sessions:list', () => listClaudeSessions())
 
   ipcMain.handle('sessions:latestForCwd', (_event, cwd: string) => latestSessionIdForCwd(cwd))
+
+  ipcMain.handle('sessions:getUsage', (_event, cwd: string) => getUsageForCwd(cwd))
 
   ipcMain.on('pty:create', (_event, { sessionId, cwd, resumeSessionId, skipPermissions, worktree, forkSession }: { sessionId: string; cwd: string; resumeSessionId?: string; skipPermissions?: boolean; worktree?: boolean; forkSession?: boolean }) => {
     createSession(sessionId, cwd, resumeSessionId ?? null, skipPermissions ?? true, worktree ?? false, forkSession ?? false, (data) => {

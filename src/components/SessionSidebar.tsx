@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Session } from '../store/sessions'
+import { ContextBar } from './ContextBar'
 
 interface Props {
   sessions: Session[]
@@ -12,9 +13,18 @@ interface Props {
 
 export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, onNewSession }: Props) {
   const [hovered, setHovered] = useState<string | null>(null)
+  const [tokensUsed, setTokensUsed] = useState<number | undefined>(undefined)
 
   const selectedId = activeId
   const selectedSession = sessions.find(s => s.id === selectedId)
+
+  useEffect(() => {
+    setTokensUsed(undefined)
+    if (!selectedSession?.cwd) return
+    window.electronAPI.getSessionUsage(selectedSession.cwd).then(usage => {
+      setTokensUsed(usage?.tokensUsed)
+    })
+  }, [selectedSession?.id])
 
   return (
     <div style={{
@@ -133,6 +143,7 @@ export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, 
           <div style={{ color: '#555', fontSize: '10px', wordBreak: 'break-all', lineHeight: 1.4 }}>
             {selectedSession.cwd}
           </div>
+          <ContextBar tokensUsed={tokensUsed} compact />
           {selectedSession.firstPrompt && (
             <div style={{
               color: '#666',
