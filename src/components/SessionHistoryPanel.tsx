@@ -231,7 +231,7 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
                         onClick={(e) => toggleFavorite(session.sessionId, e)}
                         title={isFav ? 'Remove from favorites' : 'Add to favorites'}
                         style={{
-                          fontSize: '12px', flexShrink: 0, marginTop: '1px',
+                          fontSize: '16px', flexShrink: 0, marginTop: '1px',
                           color: isFav ? '#f6c90e' : '#444',
                           cursor: 'pointer', lineHeight: 1,
                           transition: 'color 0.15s',
