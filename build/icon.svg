@@ -1,31 +1,36 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#1e1e1e"/>
-      <stop offset="100%" stop-color="#0a0a0a"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1a2e1a"/>
+      <stop offset="100%" stop-color="#0a1a0a"/>
     </linearGradient>
-    <linearGradient id="green" x1="240" y1="260" x2="548" y2="764" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#6ee7a0"/>
+    <linearGradient id="green" x1="200" y1="260" x2="560" y2="764" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#86efac"/>
       <stop offset="100%" stop-color="#22c55e"/>
     </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
   </defs>
 
-  <!-- Background -->
+  <!-- Background: dark forest green, clearly not black -->
   <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
 
-  <!-- Subtle top highlight -->
-  <rect width="1024" height="2" y="0" rx="1" fill="#ffffff" opacity="0.06"/>
+  <!-- Subtle inner border -->
+  <rect width="1024" height="1024" rx="220" fill="none" stroke="rgba(134,239,172,0.08)" stroke-width="2"/>
 
-  <!-- Terminal prompt chevron > -->
+  <!-- Terminal prompt chevron > with glow -->
   <polyline
-    points="240,262 548,512 240,762"
+    points="220,250 560,512 220,774"
     fill="none"
     stroke="url(#green)"
-    stroke-width="90"
+    stroke-width="96"
     stroke-linecap="round"
     stroke-linejoin="round"
+    filter="url(#glow)"
   />
 
   <!-- Blinking cursor block -->
-  <rect x="608" y="447" width="168" height="130" fill="url(#green)" rx="14"/>
+  <rect x="620" y="435" width="184" height="130" fill="url(#green)" rx="16" filter="url(#glow)"/>
 </svg>
