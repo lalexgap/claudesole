@@ -90,7 +90,11 @@ function findTailData(filePath: string, fileSize: number): TailData {
       if (result.tokensUsed === undefined && obj.type === 'assistant') {
         const usage = obj.message?.usage
         if (usage?.input_tokens !== undefined) {
-          result.tokensUsed = usage.input_tokens as number
+          // Total context = non-cached + cache writes + cache reads
+          result.tokensUsed =
+            (usage.input_tokens as number) +
+            ((usage.cache_creation_input_tokens as number) || 0) +
+            ((usage.cache_read_input_tokens as number) || 0)
           if (!result.model && obj.message?.model) result.model = obj.message.model as string
         }
       }
