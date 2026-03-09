@@ -49,6 +49,7 @@ export function Tab({ session, isActive, onClick, onClose, onRename, onPin, onFo
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     setCtxMenu({ x: e.clientX, y: e.clientY })
   }
 
@@ -60,7 +61,10 @@ export function Tab({ session, isActive, onClick, onClose, onRename, onPin, onFo
         onClick={onClick}
         onDoubleClick={startEdit}
         onContextMenu={handleContextMenu}
-        onMouseDown={e => { if (e.button === 0) setDraggable(true) }}
+        onMouseDown={e => {
+          if (e.button === 0) setDraggable(true)
+          if (e.button === 2) handleContextMenu(e)
+        }}
         onMouseUp={() => setDraggable(false)}
         onDragStart={onDragStart}
         onDragOver={e => divRef.current && onDragOver?.(e, divRef.current)}
