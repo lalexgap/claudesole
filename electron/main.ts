@@ -4,8 +4,63 @@ import { createSession, createShellSession, writeToSession, resizeSession, killS
 import { listClaudeSessions, latestSessionIdForCwd, getUsageForCwd } from './sessionManager'
 import { getGitInfo } from './gitInfo'
 
+// Mutable reference updated each time a window is created, used by IPC handlers
+// that need to communicate back to the renderer.
+let win: BrowserWindow | null = null
+
+function setupIpcHandlers() {
+  ipcMain.handle('sessions:list', () => listClaudeSessions())
+
+  ipcMain.handle('sessions:latestForCwd', (_event, cwd: string) => latestSessionIdForCwd(cwd))
+
+  ipcMain.handle('sessions:getUsage', (_event, cwd: string) => getUsageForCwd(cwd))
+
+  ipcMain.handle('git:info', (_event, cwd: string) => getGitInfo(cwd))
+
+  ipcMain.on('pty:create', (_event, { sessionId, cwd, resumeSessionId, skipPermissions, worktree, forkSession }: { sessionId: string; cwd: string; resumeSessionId?: string; skipPermissions?: boolean; worktree?: boolean; forkSession?: boolean }) => {
+    createSession(sessionId, cwd, resumeSessionId ?? null, skipPermissions ?? true, worktree ?? false, forkSession ?? false, (data) => {
+      win?.webContents.send('pty:data', { sessionId, data })
+    }, () => {
+      win?.webContents.send('pty:exit', { sessionId })
+    })
+  })
+
+  ipcMain.on('pty:createShell', (_event, { sessionId, cwd }: { sessionId: string; cwd: string }) => {
+    createShellSession(sessionId, cwd, (data) => {
+      win?.webContents.send('pty:data', { sessionId, data })
+    }, () => {
+      win?.webContents.send('pty:exit', { sessionId })
+    })
+  })
+
+  ipcMain.on('pty:write', (_event, { sessionId, data }: { sessionId: string; data: string }) => {
+    writeToSession(sessionId, data)
+  })
+
+  ipcMain.on('pty:resize', (_event, { sessionId, cols, rows }: { sessionId: string; cols: number; rows: number }) => {
+    resizeSession(sessionId, cols, rows)
+  })
+
+  ipcMain.on('pty:kill', (_event, { sessionId }: { sessionId: string }) => {
+    killSession(sessionId)
+  })
+
+  ipcMain.handle('dialog:openDirectory', async () => {
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openDirectory'],
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+
+  ipcMain.on('app:setBadgeCount', (_event, count: number) => {
+    app.setBadgeCount(count)
+  })
+}
+
 function createWindow() {
-  const win = new BrowserWindow({
+  win = new BrowserWindow({
     width: 1200,
     height: 800,
     titleBarStyle: 'hiddenInset',
@@ -23,64 +78,16 @@ function createWindow() {
     win.loadFile(path.join(__dirname, '../renderer/index.html'))
   }
 
-  // PTY IPC handlers
-  ipcMain.handle('sessions:list', () => listClaudeSessions())
-
-  ipcMain.handle('sessions:latestForCwd', (_event, cwd: string) => latestSessionIdForCwd(cwd))
-
-  ipcMain.handle('sessions:getUsage', (_event, cwd: string) => getUsageForCwd(cwd))
-
-  ipcMain.handle('git:info', (_event, cwd: string) => getGitInfo(cwd))
-
-  ipcMain.on('pty:create', (_event, { sessionId, cwd, resumeSessionId, skipPermissions, worktree, forkSession }: { sessionId: string; cwd: string; resumeSessionId?: string; skipPermissions?: boolean; worktree?: boolean; forkSession?: boolean }) => {
-    createSession(sessionId, cwd, resumeSessionId ?? null, skipPermissions ?? true, worktree ?? false, forkSession ?? false, (data) => {
-      win.webContents.send('pty:data', { sessionId, data })
-    }, () => {
-      win.webContents.send('pty:exit', { sessionId })
-    })
-  })
-
-  ipcMain.on('pty:createShell', (_event, { sessionId, cwd }: { sessionId: string; cwd: string }) => {
-    createShellSession(sessionId, cwd, (data) => {
-      win.webContents.send('pty:data', { sessionId, data })
-    }, () => {
-      win.webContents.send('pty:exit', { sessionId })
-    })
-  })
-
-  ipcMain.on('pty:write', (_event, { sessionId, data }: { sessionId: string; data: string }) => {
-    writeToSession(sessionId, data)
-  })
-
-  ipcMain.on('pty:resize', (_event, { sessionId, cols, rows }: { sessionId: string; cols: number; rows: number }) => {
-    resizeSession(sessionId, cols, rows)
-  })
-
-  ipcMain.on('pty:kill', (_event, { sessionId }: { sessionId: string }) => {
-    killSession(sessionId)
-  })
-
-  ipcMain.handle('dialog:openDirectory', async () => {
-    const result = await dialog.showOpenDialog(win, {
-      properties: ['openDirectory'],
-    })
-    if (result.canceled || result.filePaths.length === 0) return null
-    return result.filePaths[0]
-  })
-
-  ipcMain.on('app:setBadgeCount', (_event, count: number) => {
-    app.setBadgeCount(count)
-  })
-
   // Keyboard shortcut Cmd+T for new session (sent to renderer)
   win.webContents.on('before-input-event', (_event, input) => {
     if (input.meta && input.key === 't' && input.type === 'keyDown') {
-      win.webContents.send('shortcut:newSession')
+      win?.webContents.send('shortcut:newSession')
     }
   })
 }
 
 app.whenReady().then(() => {
+  setupIpcHandlers()
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

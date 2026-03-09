@@ -14,14 +14,14 @@ function getEnv(): Record<string, string> {
   if (resolvedEnv) return resolvedEnv
   const shell = process.env.SHELL || '/bin/zsh'
   try {
-    const output = execFileSync(shell, ['-l', '-c', 'env'], {
+    const output = execFileSync(shell, ['-l', '-c', 'env -0'], {
       encoding: 'utf8',
       timeout: 5000,
     })
     const env: Record<string, string> = { ...process.env } as Record<string, string>
-    for (const line of output.split('\n')) {
-      const eq = line.indexOf('=')
-      if (eq > 0) env[line.slice(0, eq)] = line.slice(eq + 1)
+    for (const entry of output.split('\0')) {
+      const eq = entry.indexOf('=')
+      if (eq > 0) env[entry.slice(0, eq)] = entry.slice(eq + 1)
     }
     resolvedEnv = env
   } catch {
@@ -42,7 +42,7 @@ export function createSession(
 ) {
   const args: string[] = []
   if (resumeSessionId) args.push('--resume', resumeSessionId)
-  if (forkSession) args.push('--fork-session')
+  if (forkSession && resumeSessionId) args.push('--fork-session')
   if (skipPermissions) args.push('--dangerously-skip-permissions')
   if (worktree) args.push('--worktree')
   let term: IPty

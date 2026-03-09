@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSessionsStore } from './store/sessions'
 import { TabBar } from './components/TabBar'
 import { TerminalView } from './components/TerminalView'
@@ -55,7 +55,7 @@ export default function App() {
     closeModal()
   }
 
-  const handleCloseTab = (id: string) => {
+  const handleCloseTab = useCallback((id: string) => {
     const session = sessions.find(s => s.id === id)
     if (session?.status === 'running') {
       const ok = window.confirm(`Close "${session.label}"? Claude may still be running.`)
@@ -77,7 +77,7 @@ export default function App() {
       }
       return next
     })
-  }
+  }, [sessions, focusedPaneId, removeSession])
 
   const handleSplit = (id: string, dir: 'h' | 'v') => {
     const focusedId = paneRoot ? focusedPaneId : activeId
@@ -164,7 +164,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [activeId, sessions, showModal, showHistory, showSwitcher])
+  }, [activeId, sessions, showModal, showHistory, showSwitcher, handleCloseTab])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>

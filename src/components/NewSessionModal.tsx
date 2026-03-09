@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { ClaudeSession } from '../types/ipc'
 
 function relativeTime(ms: number): string {
@@ -42,23 +42,23 @@ export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onClose }: 
 
   const q = query.toLowerCase()
 
-  const filteredSessions = sessions.filter(s =>
+  const filteredSessions = useMemo(() => sessions.filter(s =>
     !q ||
     s.projectName.toLowerCase().includes(q) ||
     s.slug.toLowerCase().includes(q) ||
     s.cwd.toLowerCase().includes(q) ||
     s.firstPrompt.toLowerCase().includes(q)
-  )
+  ), [sessions, q])
 
-  const recentFolders = [...new Set(sessions.map(s => s.cwd))]
+  const recentFolders = useMemo(() => [...new Set(sessions.map(s => s.cwd))]
     .filter(cwd => !q || cwd.toLowerCase().includes(q))
-    .slice(0, 3)
+    .slice(0, 3), [sessions, q])
 
-  const items: Item[] = [
+  const items: Item[] = useMemo(() => [
     ...filteredSessions.map(s => ({ type: 'session' as const, session: s })),
     ...recentFolders.map(cwd => ({ type: 'folder' as const, cwd })),
     { type: 'browse' },
-  ]
+  ], [filteredSessions, recentFolders])
 
   useEffect(() => { setSelected(0) }, [query])
 
