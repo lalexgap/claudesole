@@ -14,6 +14,7 @@ export function useTerminal(
   sessionId: string,
   containerRef: React.RefObject<HTMLDivElement>,
   onCmdF: () => void,
+  onCmdK: () => void,
   handleRef: React.MutableRefObject<TerminalHandle | null>,
   isShell = false,
 ) {
@@ -25,7 +26,9 @@ export function useTerminal(
   const suppressRunningUntil = useRef(0)
   const claudeRespondedRef = useRef(false) // true only when Claude (not echo) sent data since last idle
   const onCmdFRef = useRef(onCmdF)
+  const onCmdKRef = useRef(onCmdK)
   useEffect(() => { onCmdFRef.current = onCmdF })
+  useEffect(() => { onCmdKRef.current = onCmdK })
 
   useEffect(() => {
     const container = containerRef.current
@@ -60,9 +63,9 @@ export function useTerminal(
         onCmdFRef.current()
         return false
       }
-      // ⌘K clears the terminal
+      // ⌘K opens quick switcher
       if (e.metaKey && e.key === 'k' && e.type === 'keydown') {
-        term.clear()
+        onCmdKRef.current()
         return false
       }
       return true

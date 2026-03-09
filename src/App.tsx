@@ -6,6 +6,7 @@ import { NewSessionModal, SessionOpts } from './components/NewSessionModal'
 import { SessionSidebar } from './components/SessionSidebar'
 import { SessionHistoryPanel } from './components/SessionHistoryPanel'
 import { SplitView, PaneNode, splitLeaf, removeFromTree, getLeafIds } from './components/SplitView'
+import { QuickSwitcher } from './components/QuickSwitcher'
 import { ClaudeSession } from './types/ipc'
 
 export default function App() {
@@ -13,6 +14,7 @@ export default function App() {
   const [showModal, setShowModal] = useState(false)
   const [showSidebar, setShowSidebar] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [showSwitcher, setShowSwitcher] = useState(false)
   const [paneRoot, setPaneRoot] = useState<PaneNode | null>(null)
   const [focusedPaneId, setFocusedPaneId] = useState<string | null>(null)
 
@@ -142,6 +144,9 @@ export default function App() {
 
       if (e.key === 'b') { e.preventDefault(); toggleSidebar(); return }
       if (e.key === 'h') { e.preventDefault(); toggleHistory(); return }
+      if (e.key === 'k') { e.preventDefault(); setShowSwitcher(v => !v); return }
+
+      if (e.key === 'Escape' && showSwitcher) { e.preventDefault(); setShowSwitcher(false); return }
 
       if (e.key === 'w' && !showModal && !showHistory) {
         e.preventDefault()
@@ -159,7 +164,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [activeId, sessions, showModal, showHistory])
+  }, [activeId, sessions, showModal, showHistory, showSwitcher])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
@@ -209,12 +214,12 @@ export default function App() {
               {/* Keep non-visible sessions alive offscreen so xterm state is preserved */}
               {sessions.filter(s => !getLeafIds(paneRoot).includes(s.id)).map(s => (
                 <div key={s.id} style={{ position: 'absolute', left: '-9999px', top: 0, width: '800px', height: '600px' }}>
-                  <TerminalView sessionId={s.id} isActive={false} isShell={s.type === 'shell'} />
+                  <TerminalView sessionId={s.id} isActive={false} isShell={s.type === 'shell'} onCmdK={() => setShowSwitcher(true)} />
                 </div>
               ))}
               {/* Split layout */}
               <div style={{ position: 'absolute', inset: 0 }}>
-                <SplitView node={paneRoot} sessions={sessions} focusedId={focusedPaneId} onFocus={handlePaneFocus} />
+                <SplitView node={paneRoot} sessions={sessions} focusedId={focusedPaneId} onFocus={handlePaneFocus} onCmdK={() => setShowSwitcher(true)} />
               </div>
             </>
           ) : (
@@ -227,6 +232,7 @@ export default function App() {
                   sessionId={session.id}
                   isActive={session.id === activeId && !showHistory}
                   isShell={session.type === 'shell'}
+                  onCmdK={() => setShowSwitcher(true)}
                 />
               </div>
             ))
@@ -248,6 +254,15 @@ export default function App() {
           onNewInFolder={handleNewInFolder}
           onBrowse={handleBrowse}
           onClose={closeModal}
+        />
+      )}
+
+      {showSwitcher && (
+        <QuickSwitcher
+          sessions={sessions}
+          activeId={activeId}
+          onSelect={setActive}
+          onClose={() => setShowSwitcher(false)}
         />
       )}
     </div>

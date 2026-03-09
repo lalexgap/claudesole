@@ -54,9 +54,10 @@ interface SplitViewProps {
   sessions: Session[]
   focusedId: string | null
   onFocus: (id: string) => void
+  onCmdK: () => void
 }
 
-export function SplitView({ node, sessions, focusedId, onFocus }: SplitViewProps) {
+export function SplitView({ node, sessions, focusedId, onFocus, onCmdK }: SplitViewProps) {
   if (node.type === 'leaf') {
     const session = sessions.find(s => s.id === node.sessionId)
     const isFocused = node.sessionId === focusedId
@@ -73,15 +74,16 @@ export function SplitView({ node, sessions, focusedId, onFocus }: SplitViewProps
           sessionId={node.sessionId}
           isActive={isFocused}
           isShell={session?.type === 'shell'}
+          onCmdK={onCmdK}
         />
       </div>
     )
   }
 
-  return <SplitNode node={node} sessions={sessions} focusedId={focusedId} onFocus={onFocus} />
+  return <SplitNode node={node} sessions={sessions} focusedId={focusedId} onFocus={onFocus} onCmdK={onCmdK} />
 }
 
-function SplitNode({ node, sessions, focusedId, onFocus }: { node: PaneSplit } & Omit<SplitViewProps, 'node'>) {
+function SplitNode({ node, sessions, focusedId, onFocus, onCmdK }: { node: PaneSplit } & Omit<SplitViewProps, 'node'>) {
   const [ratio, setRatio] = useState(node.ratio)
   const containerRef = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
@@ -124,7 +126,7 @@ function SplitNode({ node, sessions, focusedId, onFocus }: { node: PaneSplit } &
         [isH ? 'width' : 'height']: `calc(${ratio * 100}% - ${DIVIDER / 2}px)`,
         flexShrink: 0, overflow: 'hidden', position: 'relative',
       }}>
-        <SplitView node={node.first} sessions={sessions} focusedId={focusedId} onFocus={onFocus} />
+        <SplitView node={node.first} sessions={sessions} focusedId={focusedId} onFocus={onFocus} onCmdK={onCmdK} />
       </div>
 
       {/* Drag handle */}
@@ -144,7 +146,7 @@ function SplitNode({ node, sessions, focusedId, onFocus }: { node: PaneSplit } &
 
       {/* Second pane */}
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-        <SplitView node={node.second} sessions={sessions} focusedId={focusedId} onFocus={onFocus} />
+        <SplitView node={node.second} sessions={sessions} focusedId={focusedId} onFocus={onFocus} onCmdK={onCmdK} />
       </div>
     </div>
   )
