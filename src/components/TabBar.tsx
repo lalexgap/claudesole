@@ -1,5 +1,5 @@
-import React from 'react'
-import { Session } from '../store/sessions'
+import React, { useState, useRef } from 'react'
+import { Session, useSessionsStore } from '../store/sessions'
 import { Tab } from './Tab'
 
 interface TabBarProps {
@@ -25,11 +25,45 @@ export function TabBar({
   onRenameTab, onPinTab, onForkTab, onSplitHTab, onSplitVTab,
   historyOpen, onToggleHistory, sidebarOpen, onToggleSidebar,
 }: TabBarProps) {
-  // Pinned sessions always appear first
-  const sorted = [...sessions].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+  const reorderSession = useSessionsStore((s) => s.reorderSession)
+  const dragId = useRef<string | null>(null)
+  const [insertIndex, setInsertIndex] = useState<number | null>(null)
+
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    dragId.current = id
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: React.DragEvent, index: number, el: HTMLDivElement) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    const rect = el.getBoundingClientRect()
+    const mid = rect.left + rect.width / 2
+    setInsertIndex(e.clientX < mid ? index : index + 1)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    if (dragId.current !== null && insertIndex !== null) {
+      reorderSession(dragId.current, insertIndex)
+    }
+    dragId.current = null
+    setInsertIndex(null)
+  }
+
+  const handleDragEnd = () => {
+    dragId.current = null
+    setInsertIndex(null)
+  }
+
+  const indicator = (
+    <div style={{ width: '2px', height: '24px', background: '#4ade80', borderRadius: '1px', flexShrink: 0 }} />
+  )
 
   return (
     <div
+      onDrop={handleDrop}
+      onDragOver={e => e.preventDefault()}
       style={{
         WebkitAppRegion: 'drag',
         display: 'flex',
@@ -44,20 +78,26 @@ export function TabBar({
         flexShrink: 0,
       } as React.CSSProperties}
     >
-      {sorted.map((session) => (
-        <Tab
-          key={session.id}
-          session={session}
-          isActive={session.id === activeId}
-          onClick={() => onSelectTab(session.id)}
-          onClose={(e) => { e.stopPropagation(); onCloseTab(session.id) }}
-          onRename={(label) => onRenameTab(session.id, label)}
-          onPin={() => onPinTab(session.id)}
-          onFork={() => onForkTab(session.id)}
-          onSplitH={() => onSplitHTab(session.id)}
-          onSplitV={() => onSplitVTab(session.id)}
-        />
+      {sessions.map((session, i) => (
+        <React.Fragment key={session.id}>
+          {insertIndex === i && indicator}
+          <Tab
+            session={session}
+            isActive={session.id === activeId}
+            onClick={() => onSelectTab(session.id)}
+            onClose={(e) => { e.stopPropagation(); onCloseTab(session.id) }}
+            onRename={(label) => onRenameTab(session.id, label)}
+            onPin={() => onPinTab(session.id)}
+            onFork={() => onForkTab(session.id)}
+            onSplitH={() => onSplitHTab(session.id)}
+            onSplitV={() => onSplitVTab(session.id)}
+            onDragStart={e => handleDragStart(e, session.id)}
+            onDragOver={(e, el) => handleDragOver(e, i, el)}
+            onDragEnd={handleDragEnd}
+          />
+        </React.Fragment>
       ))}
+      {insertIndex === sessions.length && indicator}
 
       <button
         onClick={onNewTab}

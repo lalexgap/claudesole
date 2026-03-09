@@ -11,9 +11,13 @@ interface TabProps {
   onFork: () => void
   onSplitH: () => void
   onSplitV: () => void
+  onDragStart?: (e: React.DragEvent) => void
+  onDragOver?: (e: React.DragEvent, el: HTMLDivElement) => void
+  onDragEnd?: () => void
 }
 
-export function Tab({ session, isActive, onClick, onClose, onRename, onPin, onFork, onSplitH, onSplitV }: TabProps) {
+export function Tab({ session, isActive, onClick, onClose, onRename, onPin, onFork, onSplitH, onSplitV, onDragStart, onDragOver, onDragEnd }: TabProps) {
+  const divRef = useRef<HTMLDivElement>(null)
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
@@ -50,9 +54,14 @@ export function Tab({ session, isActive, onClick, onClose, onRename, onPin, onFo
   return (
     <>
       <div
+        ref={divRef}
+        draggable
         onClick={onClick}
         onDoubleClick={startEdit}
         onContextMenu={handleContextMenu}
+        onDragStart={onDragStart}
+        onDragOver={e => divRef.current && onDragOver?.(e, divRef.current)}
+        onDragEnd={onDragEnd}
         style={{
           WebkitAppRegion: 'no-drag',
           display: 'flex',

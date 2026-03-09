@@ -24,6 +24,7 @@ interface SessionsState {
   markWaiting: (id: string) => void
   renameSession: (id: string, label: string) => void
   togglePin: (id: string) => void
+  reorderSession: (id: string, toIndex: number) => void
 }
 
 export const useSessionsStore = create<SessionsState>((set) => ({
@@ -71,4 +72,14 @@ export const useSessionsStore = create<SessionsState>((set) => ({
     set((state) => ({
       sessions: state.sessions.map((s) => s.id === id ? { ...s, pinned: !s.pinned } : s),
     })),
+
+  reorderSession: (id: string, toIndex: number) =>
+    set((state) => {
+      const from = state.sessions.findIndex((s) => s.id === id)
+      if (from === -1 || from === toIndex) return state
+      const arr = [...state.sessions]
+      const [item] = arr.splice(from, 1)
+      arr.splice(toIndex > from ? toIndex - 1 : toIndex, 0, item)
+      return { sessions: arr }
+    }),
 }))
