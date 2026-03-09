@@ -65,19 +65,20 @@ export function TabBar({
       onDrop={handleDrop}
       onDragOver={e => e.preventDefault()}
       style={{
-        WebkitAppRegion: 'drag',
         display: 'flex',
         alignItems: 'center',
         height: '40px',
-        paddingLeft: '76px',
         paddingRight: '8px',
         background: '#111',
         borderBottom: '1px solid #222',
         gap: '2px',
         overflowX: 'auto',
         flexShrink: 0,
-      } as React.CSSProperties}
+      }}
     >
+      {/* Traffic light spacer — draggable so window can be moved from this area */}
+      <div style={{ width: '76px', flexShrink: 0, alignSelf: 'stretch', WebkitAppRegion: 'drag' } as React.CSSProperties} />
+
       {sessions.map((session, i) => (
         <React.Fragment key={session.id}>
           {insertIndex === i && indicator}
