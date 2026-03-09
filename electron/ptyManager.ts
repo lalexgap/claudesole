@@ -1,8 +1,34 @@
 import * as pty from 'node-pty'
+import { execFileSync } from 'child_process'
 
 type IPty = pty.IPty
 
 const sessions = new Map<string, IPty>()
+
+// In packaged apps macOS launches with a minimal PATH that won't include
+// user-installed tools (npm globals, homebrew, etc). Resolve the full PATH
+// from a login shell once and reuse it for all spawned processes.
+let resolvedEnv: Record<string, string> | null = null
+
+function getEnv(): Record<string, string> {
+  if (resolvedEnv) return resolvedEnv
+  const shell = process.env.SHELL || '/bin/zsh'
+  try {
+    const output = execFileSync(shell, ['-l', '-c', 'env'], {
+      encoding: 'utf8',
+      timeout: 5000,
+    })
+    const env: Record<string, string> = { ...process.env } as Record<string, string>
+    for (const line of output.split('\n')) {
+      const eq = line.indexOf('=')
+      if (eq > 0) env[line.slice(0, eq)] = line.slice(eq + 1)
+    }
+    resolvedEnv = env
+  } catch {
+    resolvedEnv = { ...process.env } as Record<string, string>
+  }
+  return resolvedEnv
+}
 
 export function createSession(
   sessionId: string,
@@ -26,7 +52,7 @@ export function createSession(
       cols: 80,
       rows: 24,
       cwd,
-      env: { ...process.env } as Record<string, string>,
+      env: getEnv(),
     })
   } catch (err) {
     console.error('[ptyManager] spawn failed:', err)
@@ -66,7 +92,7 @@ export function createShellSession(
       cols: 80,
       rows: 24,
       cwd,
-      env: { ...process.env } as Record<string, string>,
+      env: getEnv(),
     })
   } catch (err) {
     console.error('[ptyManager] shell spawn failed:', err)
