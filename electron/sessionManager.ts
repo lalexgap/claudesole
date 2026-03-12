@@ -183,6 +183,7 @@ function _listClaudeSessions(): ClaudeSession[] {
 
       const { cwd, slug, firstPrompt, latestPrompt, tokensUsed, model } = parseFile(filePath, fileSize)
       if (!cwd) continue
+      if (cwd.includes('/.claude/worktrees/')) continue
 
       sessions.push({
         sessionId: file.name.replace('.jsonl', ''),
