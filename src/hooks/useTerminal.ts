@@ -26,6 +26,7 @@ export function useTerminal(
   const notifiedIdleRef = useRef(false)
   const suppressRunningUntil = useRef(0)
   const claudeRespondedRef = useRef(false) // true only when Claude (not echo) sent data since last idle
+  const userActedRef = useRef(false) // true after user types; gates notification reset
   const onCmdFRef = useRef(onCmdF)
   const onCmdKRef = useRef(onCmdK)
   useEffect(() => { onCmdFRef.current = onCmdF })
@@ -84,6 +85,7 @@ export function useTerminal(
       window.electronAPI.writeSession(sessionId, data)
       // Suppress green flash: echoes of user input arrive within ~10ms
       suppressRunningUntil.current = Date.now() + 150
+      userActedRef.current = true
     })
 
     // Request notification permission on first use
@@ -98,8 +100,13 @@ export function useTerminal(
       const isClaudeData = Date.now() > suppressRunningUntil.current
       if (isClaudeData) {
         markRunning(id)
-        claudeRespondedRef.current = true
-        notifiedIdleRef.current = false // allow notification when this response finishes
+        // Only reset notification gate if the user has actually typed since the last notification.
+        // This prevents spurious PTY output (e.g. resize redraws) from re-arming the notification.
+        if (userActedRef.current) {
+          claudeRespondedRef.current = true
+          notifiedIdleRef.current = false
+          userActedRef.current = false
+        }
       }
 
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current)

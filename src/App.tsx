@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useSessionsStore } from './store/sessions'
 import { TabBar } from './components/TabBar'
 import { TerminalView } from './components/TerminalView'
 import { NewSessionModal, SessionOpts } from './components/NewSessionModal'
 import { SessionSidebar } from './components/SessionSidebar'
 import { SessionHistoryPanel } from './components/SessionHistoryPanel'
-import { SplitView, PaneNode, splitLeaf, removeFromTree, getLeafIds } from './components/SplitView'
+import { PaneNode, splitLeaf, removeFromTree, getLeafIds, computeLayout, updateRatioAtPath, SplitDividers } from './components/SplitView'
 import { QuickSwitcher } from './components/QuickSwitcher'
 import { WorktreePanel } from './components/WorktreePanel'
 import { ClaudeSession } from './types/ipc'
@@ -23,9 +23,32 @@ export default function App() {
   // Map from primary session ID → currently focused session ID within that tab
   const [focusedPanes, setFocusedPanes] = useState<Map<string, string>>(new Map())
 
+  // Content area ref + size — used for pixel-accurate split layout
+  const contentRef = useRef<HTMLDivElement>(null)
+  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el) return
+    const ro = new ResizeObserver(entries => {
+      const { width, height } = entries[0].contentRect
+      setContainerSize({ w: width, h: height })
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   // Derive the active tab's pane root and focused pane ID
   const activePaneRoot = activeId ? (paneRoots.get(activeId) ?? null) : null
   const activeFocusedId = activeId ? (focusedPanes.get(activeId) ?? activeId) : null
+
+  // Compute split layout (pixel rects + dividers) when in split mode
+  const { splitLayoutMap, splitDividers } = useMemo(() => {
+    if (!activePaneRoot || containerSize.w === 0) {
+      return { splitLayoutMap: new Map<string, { left: number; top: number; width: number; height: number }>(), splitDividers: [] }
+    }
+    const { rects, dividers } = computeLayout(activePaneRoot, 0, 0, containerSize.w, containerSize.h)
+    return { splitLayoutMap: rects, splitDividers: dividers }
+  }, [activePaneRoot, containerSize])
 
   // Compute which sessions are "secondary" (in a split but not the owner/primary)
   const allSplitLeafIds = new Set([...paneRoots.values()].flatMap(root => getLeafIds(root)))
@@ -151,6 +174,15 @@ export default function App() {
     setFocusedPanes(prev => new Map([...prev, [activeId, id]]))
   }
 
+  const handleDividerDrag = (path: string, newRatio: number) => {
+    if (!activeId) return
+    setPaneRoots(prev => {
+      const root = prev.get(activeId)
+      if (!root) return prev
+      return new Map([...prev, [activeId, updateRatioAtPath(root, path, newRatio)]])
+    })
+  }
+
   const handleNewShellInCwd = (cwd: string) => {
     const sessionId = addSession(cwd, '', undefined, undefined, 'shell')
     window.electronAPI.createShellSession(sessionId, cwd)
@@ -176,25 +208,21 @@ export default function App() {
     const session = sessions.find(s => s.id === id)
     if (!session) return
 
-    // Use the stored Claude session ID, or find the latest one for this cwd
     let claudeId = session.claudeSessionId
     if (!claudeId) {
       claudeId = await window.electronAPI.latestSessionForCwd(session.cwd) ?? undefined
     }
 
     const newId = addSession(session.cwd, session.firstPrompt, session.label)
-    // Pass resumeSessionId + forkSession=true → claude --resume <id> --fork-session
     window.electronAPI.createSession(newId, session.cwd, claudeId, true, false, true)
   }
 
-  // History panel: resume session with default opts
   const handleHistoryResume = (session: ClaudeSession, skipPermissions: boolean) => {
     const sessionId = addSession(session.cwd, session.firstPrompt, undefined, session.sessionId)
     window.electronAPI.createSession(sessionId, session.cwd, session.sessionId, skipPermissions, false)
     setShowHistory(false)
   }
 
-  // History panel: fork session
   const handleHistoryFork = (session: ClaudeSession, skipPermissions: boolean) => {
     const newId = addSession(session.cwd, session.firstPrompt, undefined, session.sessionId)
     window.electronAPI.createSession(newId, session.cwd, session.sessionId, skipPermissions, false, true)
@@ -235,9 +263,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [activeId, tabSessions, showModal, showHistory, showSwitcher, showWorktrees, handleCloseTab])
 
-  // Determine which session IDs are in the active split (if any)
-  const activeSplitLeafIds = activePaneRoot ? new Set(getLeafIds(activePaneRoot)) : null
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
       <TabBar
@@ -245,9 +270,7 @@ export default function App() {
         allSessions={sessions}
         paneRoots={paneRoots}
         activeId={activeId}
-        onSelectTab={(id) => {
-            setActive(id)
-          }}
+        onSelectTab={setActive}
         onCloseTab={handleCloseTab}
         onNewTab={openModal}
         onNewShellTab={handleNewShellTab}
@@ -276,7 +299,7 @@ export default function App() {
           />
         )}
 
-        <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
+        <div ref={contentRef} style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
           {sessions.length === 0 && !showHistory && (
             <div style={{
               position: 'absolute', inset: 0,
@@ -287,33 +310,54 @@ export default function App() {
             </div>
           )}
 
-          {activePaneRoot ? (
-            <>
-              {/* Keep sessions not in the active split alive offscreen (single sessions + secondary sessions of other tabs) */}
-              {sessions.filter(s => !activeSplitLeafIds!.has(s.id)).map(s => (
-                <div key={s.id} style={{ position: 'absolute', left: '-9999px', top: 0, width: '800px', height: '600px' }}>
-                  <TerminalView sessionId={s.id} isActive={false} isShell={s.type === 'shell'} onCmdK={() => setShowSwitcher(true)} />
-                </div>
-              ))}
-              {/* Split layout for the active tab */}
-              <div style={{ position: 'absolute', inset: 0 }}>
-                <SplitView node={activePaneRoot} sessions={sessions} focusedId={activeFocusedId} onFocus={handlePaneFocus} onCmdK={() => setShowSwitcher(true)} />
-              </div>
-            </>
-          ) : (
-            sessions.map(session => (
-              <div key={session.id} style={{
-                position: 'absolute', inset: 0,
-                visibility: session.id === activeId && !showHistory ? 'visible' : 'hidden',
-              }}>
+          {/* Always render ALL terminals in a stable flat list — never unmounts on tab switch */}
+          {sessions.map(session => {
+            const splitRect = splitLayoutMap.get(session.id)
+            const isNonSplitActive = !activePaneRoot && session.id === activeId && !showHistory
+            const isFocused = splitRect !== undefined && session.id === activeFocusedId
+
+            let style: React.CSSProperties
+            if (splitRect) {
+              // In the active split — position using computed pixel rect
+              style = {
+                position: 'absolute',
+                left: splitRect.left,
+                top: splitRect.top,
+                width: splitRect.width,
+                height: splitRect.height,
+                outline: isFocused ? '1px solid rgba(74,222,128,0.35)' : '1px solid #1e1e1e',
+                outlineOffset: '-1px',
+              }
+            } else if (isNonSplitActive) {
+              style = { position: 'absolute', inset: 0 }
+            } else {
+              // Offscreen — keep xterm alive but out of view
+              style = { position: 'absolute', left: '-9999px', top: 0, width: '800px', height: '600px' }
+            }
+
+            return (
+              <div
+                key={session.id}
+                style={style}
+                onClick={splitRect ? () => handlePaneFocus(session.id) : undefined}
+              >
                 <TerminalView
                   sessionId={session.id}
-                  isActive={session.id === activeId && !showHistory}
+                  isActive={isNonSplitActive || isFocused}
                   isShell={session.type === 'shell'}
                   onCmdK={() => setShowSwitcher(true)}
                 />
               </div>
-            ))
+            )
+          })}
+
+          {/* Drag dividers overlay — no terminals inside */}
+          {activePaneRoot && containerSize.w > 0 && (
+            <SplitDividers
+              dividers={splitDividers}
+              containerRef={contentRef}
+              onRatioChange={handleDividerDrag}
+            />
           )}
 
           {showHistory && (
