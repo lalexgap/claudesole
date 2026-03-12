@@ -22,7 +22,6 @@ export function useTerminal(
 ) {
   const markRunning = useSessionsStore((s) => s.markRunning)
   const markWaiting = useSessionsStore((s) => s.markWaiting)
-  const removeSession = useSessionsStore((s) => s.removeSession)
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const notifiedIdleRef = useRef(false)
   const suppressRunningUntil = useRef(0)
@@ -32,14 +31,12 @@ export function useTerminal(
   const onCmdKRef = useRef(onCmdK)
   const markRunningRef = useRef(markRunning)
   const markWaitingRef = useRef(markWaiting)
-  const removeSessionRef = useRef(removeSession)
   const isShellRef = useRef(isShell)
   const isActiveRef = useRef(isActive)
   useEffect(() => { onCmdFRef.current = onCmdF })
   useEffect(() => { onCmdKRef.current = onCmdK })
   useEffect(() => { markRunningRef.current = markRunning })
   useEffect(() => { markWaitingRef.current = markWaiting })
-  useEffect(() => { removeSessionRef.current = removeSession })
   useEffect(() => { isShellRef.current = isShell })
   useEffect(() => { isActiveRef.current = isActive })
 
@@ -138,11 +135,6 @@ export function useTerminal(
       }, 500)
     })
 
-    const removeExitListener = window.electronAPI.onExit((id) => {
-      if (id !== sessionId) return
-      removeSessionRef.current(id)
-    })
-
     const resizeObserver = new ResizeObserver(() => {
       // Preserve scroll position across fit() — xterm resets to top on reflow
       const wasAtBottom = term.buffer.active.viewportY >= term.buffer.active.baseY
@@ -155,7 +147,6 @@ export function useTerminal(
     return () => {
       handleRef.current = null
       removeDataListener()
-      removeExitListener()
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
       resizeObserver.disconnect()
       term.dispose()

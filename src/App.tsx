@@ -75,23 +75,38 @@ export default function App() {
     window.electronAPI?.setBadgeCount?.(waiting)
   }, [sessions])
 
-  const startSession = (cwd: string, opts: SessionOpts, resumeOpts?: { sessionId: string; firstPrompt: string; claudeSessionId: string }) => {
-    const worktreeArg = opts.worktree ? (opts.branch || true) : false
-    const sessionId = addSession(cwd, resumeOpts?.firstPrompt, undefined, resumeOpts?.claudeSessionId, 'claude', !!worktreeArg)
-    window.electronAPI.createSession(sessionId, cwd, resumeOpts?.claudeSessionId, opts.skipPermissions, worktreeArg || undefined)
+  const startSession = async (cwd: string, opts: SessionOpts, resumeOpts?: { sessionId: string; firstPrompt: string; claudeSessionId: string }) => {
+    let sessionCwd = cwd
+    let worktreeArg: boolean | string | undefined = undefined
+
+    if (opts.worktree) {
+      if (opts.baseBranch && opts.newBranchName) {
+        try {
+          sessionCwd = await window.electronAPI.createWorktree(cwd, opts.newBranchName, opts.baseBranch)
+        } catch (err) {
+          alert(`Failed to create worktree: ${err instanceof Error ? err.message : err}`)
+          return ''
+        }
+      } else {
+        worktreeArg = opts.newBranchName || true
+      }
+    }
+
+    const sessionId = addSession(sessionCwd, resumeOpts?.firstPrompt, undefined, resumeOpts?.claudeSessionId, 'claude', opts.worktree)
+    window.electronAPI.createSession(sessionId, sessionCwd, resumeOpts?.claudeSessionId, opts.skipPermissions, worktreeArg)
     return sessionId
   }
 
-  const handleResume = (session: ClaudeSession, opts: SessionOpts) => {
-    const sessionId = startSession(session.cwd, opts, { sessionId: session.sessionId, firstPrompt: session.firstPrompt, claudeSessionId: session.sessionId })
+  const handleResume = async (session: ClaudeSession, opts: SessionOpts) => {
+    const sessionId = await startSession(session.cwd, opts, { sessionId: session.sessionId, firstPrompt: session.firstPrompt, claudeSessionId: session.sessionId })
     closeModal()
-    if (pendingSplit) handleSplitWithNew(sessionId)
+    if (pendingSplit && sessionId) handleSplitWithNew(sessionId)
   }
 
-  const handleNewInFolder = (cwd: string, opts: SessionOpts) => {
-    const sessionId = startSession(cwd, opts)
+  const handleNewInFolder = async (cwd: string, opts: SessionOpts) => {
+    const sessionId = await startSession(cwd, opts)
     closeModal()
-    if (pendingSplit) handleSplitWithNew(sessionId)
+    if (pendingSplit && sessionId) handleSplitWithNew(sessionId)
   }
 
   const handleCloseTab = useCallback((id: string) => {
@@ -224,6 +239,14 @@ export default function App() {
     window.electronAPI.createSession(newId, session.cwd, session.sessionId, skipPermissions, false, true)
     setShowHistory(false)
   }
+
+  // Top-level exit handler — runs even if the terminal component hasn't mounted yet
+  // (prevents blank, undismissable tabs when a session fails immediately)
+  useEffect(() => {
+    return window.electronAPI.onExit((id) => {
+      removeSession(id)
+    })
+  }, [removeSession])
 
   useEffect(() => {
     if (!window.electronAPI) return

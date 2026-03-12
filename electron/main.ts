@@ -3,7 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { createSession, createShellSession, writeToSession, resizeSession, killSession } from './ptyManager'
 import { listClaudeSessions, latestSessionIdForCwd, getUsageForCwd } from './sessionManager'
-import { getGitInfo, listWorktrees, removeWorktree, listBranches } from './gitInfo'
+import { getGitInfo, listWorktrees, removeWorktree, listBranches, createWorktree } from './gitInfo'
 
 function validateDir(p: unknown): string {
   if (typeof p !== 'string' || !path.isAbsolute(p)) throw new Error('Invalid path')
@@ -37,6 +37,14 @@ function setupIpcHandlers() {
 
   ipcMain.handle('git:listBranches', (_event, cwd: string) => {
     try { return listBranches(validateDir(cwd)) } catch { return [] }
+  })
+
+  ipcMain.handle('git:createWorktree', (_event, { repoPath, newBranch, baseBranch }: { repoPath: string; newBranch: string; baseBranch: string }) => {
+    try {
+      return createWorktree(validateDir(repoPath), newBranch, baseBranch)
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : 'Failed to create worktree')
+    }
   })
 
   ipcMain.handle('git:removeWorktree', (_event, { repoPath, worktreePath, force }: { repoPath: string; worktreePath: string; force: boolean }) => {

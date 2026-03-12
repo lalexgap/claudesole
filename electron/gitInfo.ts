@@ -1,4 +1,5 @@
 import { execFileSync } from 'child_process'
+import path from 'path'
 
 export interface GitInfo {
   branch: string | null
@@ -70,6 +71,15 @@ export function removeWorktree(repoPath: string, worktreePath: string, force: bo
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'pipe'],
   })
+}
+
+export function createWorktree(repoPath: string, newBranch: string, baseBranch: string): string {
+  const worktreePath = path.join(repoPath, '.claude', 'worktrees', newBranch)
+  execFileSync('git', ['-C', repoPath, 'worktree', 'add', '-b', newBranch, worktreePath, baseBranch], {
+    encoding: 'utf-8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  return worktreePath
 }
 
 export function listBranches(cwd: string): string[] {

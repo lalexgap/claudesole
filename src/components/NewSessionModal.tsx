@@ -18,7 +18,7 @@ type Item =
   | { type: 'shellFolder'; cwd: string }
   | { type: 'shellBrowse' }
 
-export interface SessionOpts { skipPermissions: boolean; worktree: boolean; branch?: string }
+export interface SessionOpts { skipPermissions: boolean; worktree: boolean; newBranchName?: string; baseBranch?: string }
 
 interface Props {
   onResume: (session: ClaudeSession, opts: SessionOpts) => void
@@ -38,9 +38,10 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
   const [step, setStep] = useState<'pick' | 'options'>('pick')
   const [pendingCwd, setPendingCwd] = useState<string | null>(null)
   const [worktree, setWorktree] = useState(false)
-  const [branch, setBranch] = useState('')
+  const [newBranchName, setNewBranchName] = useState('')
+  const [baseBranchSearch, setBaseBranchSearch] = useState('')
+  const [baseBranch, setBaseBranch] = useState('')
   const [branches, setBranches] = useState<string[]>([])
-  const [branchSearch, setBranchSearch] = useState('')
   const [branchOpen, setBranchOpen] = useState(false)
   const [branchIdx, setBranchIdx] = useState(0)
 
@@ -85,11 +86,12 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
     (selected < filteredSessions.length ? filteredSessions[selected] : null)
 
   const branchInputRef = useRef<HTMLInputElement>(null)
+  const newBranchRef = useRef<HTMLInputElement>(null)
   const branchListRef = useRef<HTMLDivElement>(null)
 
   const filteredBranches = useMemo(() =>
-    branches.filter(b => !branchSearch || b.toLowerCase().includes(branchSearch.toLowerCase())),
-    [branches, branchSearch]
+    branches.filter(b => !baseBranchSearch || b.toLowerCase().includes(baseBranchSearch.toLowerCase())),
+    [branches, baseBranchSearch]
   )
 
   useEffect(() => {
@@ -98,9 +100,6 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
     } else {
       setBranches([])
     }
-    setBranch('')
-    setBranchSearch('')
-    setBranchOpen(false)
   }, [worktree, pendingCwd])
 
   useEffect(() => {
@@ -115,17 +114,23 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
     }
     setPendingCwd(target)
     setWorktree(false)
-    setBranch('')
+    setNewBranchName('')
+    setBaseBranchSearch('')
+    setBaseBranch('')
     setBranches([])
-    setBranchSearch('')
     setBranchOpen(false)
     setStep('options')
   }
 
   const handleStart = useCallback(() => {
     if (!pendingCwd) return
-    onNewInFolder(pendingCwd, { skipPermissions, worktree, branch: worktree && branch ? branch : undefined })
-  }, [pendingCwd, skipPermissions, worktree, branch, onNewInFolder])
+    onNewInFolder(pendingCwd, {
+      skipPermissions,
+      worktree,
+      newBranchName: worktree && newBranchName ? newBranchName : undefined,
+      baseBranch: worktree && baseBranch ? baseBranch : undefined,
+    })
+  }, [pendingCwd, skipPermissions, worktree, newBranchName, baseBranch, onNewInFolder])
 
   const activate = useCallback((item: Item) => {
     if (item.type === 'session') onResume(item.session, { skipPermissions, worktree: false })
@@ -153,12 +158,12 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
       if (branchOpen) {
         if (e.key === 'ArrowDown') { e.preventDefault(); setBranchIdx(i => Math.min(i + 1, filteredBranches.length - 1)) }
         if (e.key === 'ArrowUp') { e.preventDefault(); setBranchIdx(i => Math.max(i - 1, 0)) }
-        if (e.key === 'Enter') { e.preventDefault(); const b = filteredBranches[branchIdx]; if (b) { setBranch(b); setBranchSearch(b); setBranchOpen(false) } }
+        if (e.key === 'Enter') { e.preventDefault(); const b = filteredBranches[branchIdx]; if (b) { setBaseBranch(b); setBaseBranchSearch(b); setBranchOpen(false) } }
         if (e.key === 'Escape') { e.preventDefault(); setBranchOpen(false) }
         return
       }
       if (e.key === 'Escape') { e.preventDefault(); setStep('pick') }
-      if (e.key === 'Enter') { e.preventDefault(); handleStart() }
+      if (e.key === 'Enter' && document.activeElement !== newBranchRef.current) { e.preventDefault(); handleStart() }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -367,46 +372,64 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
                   <span style={{ color: '#777', fontSize: '11px' }}>--worktree</span>
                 </label>
                 {worktree && (
-                  <div style={{ position: 'relative', marginLeft: '20px' }}>
-                    <input
-                      ref={branchInputRef}
-                      value={branchSearch}
-                      onChange={e => { setBranchSearch(e.target.value); setBranch(''); setBranchOpen(true); setBranchIdx(0) }}
-                      onFocus={() => setBranchOpen(true)}
-                      onBlur={() => setTimeout(() => setBranchOpen(false), 150)}
-                      placeholder="Branch (optional)…"
-                      style={{
-                        width: '100%', boxSizing: 'border-box',
-                        background: '#252525', border: '1px solid #3a3a3a', borderRadius: '5px',
-                        color: branch ? '#e5e5e5' : '#aaa', fontSize: '12px',
-                        padding: '5px 8px', outline: 'none',
-                      }}
-                    />
-                    {branchOpen && filteredBranches.length > 0 && (
-                      <div
-                        ref={branchListRef}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginLeft: '20px' }}>
+                    <div style={{ position: 'relative' }}>
+                      <div style={{ color: '#555', fontSize: '10px', marginBottom: '3px' }}>Base branch</div>
+                      <input
+                        ref={branchInputRef}
+                        value={baseBranchSearch}
+                        onChange={e => { setBaseBranchSearch(e.target.value); setBaseBranch(''); setBranchOpen(true); setBranchIdx(0) }}
+                        onFocus={() => setBranchOpen(true)}
+                        onBlur={() => setTimeout(() => setBranchOpen(false), 150)}
+                        placeholder="Select base branch…"
                         style={{
-                          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 10,
+                          width: '100%', boxSizing: 'border-box',
                           background: '#252525', border: '1px solid #3a3a3a', borderRadius: '5px',
-                          maxHeight: '140px', overflowY: 'auto',
-                          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                          color: baseBranch ? '#e5e5e5' : '#aaa', fontSize: '12px',
+                          padding: '5px 8px', outline: 'none',
                         }}
-                      >
-                        {filteredBranches.map((b, i) => (
-                          <div
-                            key={b}
-                            onMouseDown={e => { e.preventDefault(); setBranch(b); setBranchSearch(b); setBranchOpen(false) }}
-                            style={{
-                              padding: '5px 8px', fontSize: '12px', cursor: 'pointer',
-                              color: i === branchIdx ? '#e5e5e5' : '#aaa',
-                              background: i === branchIdx ? 'rgba(255,255,255,0.07)' : 'transparent',
-                            }}
-                          >
-                            {b}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                      />
+                      {branchOpen && filteredBranches.length > 0 && (
+                        <div
+                          ref={branchListRef}
+                          style={{
+                            position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 10,
+                            background: '#252525', border: '1px solid #3a3a3a', borderRadius: '5px',
+                            maxHeight: '140px', overflowY: 'auto',
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                          }}
+                        >
+                          {filteredBranches.map((b, i) => (
+                            <div
+                              key={b}
+                              onMouseDown={e => { e.preventDefault(); setBaseBranch(b); setBaseBranchSearch(b); setBranchOpen(false) }}
+                              style={{
+                                padding: '5px 8px', fontSize: '12px', cursor: 'pointer',
+                                color: i === branchIdx ? '#e5e5e5' : '#aaa',
+                                background: i === branchIdx ? 'rgba(255,255,255,0.07)' : 'transparent',
+                              }}
+                            >
+                              {b}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <div style={{ color: '#555', fontSize: '10px', marginBottom: '3px' }}>New branch name</div>
+                      <input
+                        ref={newBranchRef}
+                        value={newBranchName}
+                        onChange={e => setNewBranchName(e.target.value)}
+                        placeholder="e.g. feature/my-changes"
+                        style={{
+                          width: '100%', boxSizing: 'border-box',
+                          background: '#252525', border: '1px solid #3a3a3a', borderRadius: '5px',
+                          color: newBranchName ? '#e5e5e5' : '#aaa', fontSize: '12px',
+                          padding: '5px 8px', outline: 'none',
+                        }}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -485,16 +508,13 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
             <>
               <DetailLabel>--worktree</DetailLabel>
               <div style={{ color: '#666', fontSize: '11px', lineHeight: '1.7' }}>
-                {branch
-                  ? <>Creates an isolated git worktree checked out to <span style={{ color: '#aaa' }}>{branch}</span>.</>
-                  : 'Creates an isolated git worktree on a new auto-named branch from the default remote. Automatically cleaned up if no changes are made.'
+                {worktree && baseBranch && newBranchName
+                  ? <>Creates worktree <span style={{ color: '#aaa' }}>.claude/worktrees/{newBranchName}</span> branching off <span style={{ color: '#aaa' }}>{baseBranch}</span>.</>
+                  : worktree
+                  ? 'Select a base branch and enter a new branch name to create an isolated worktree.'
+                  : 'Enable --worktree for isolated parallel work. Automatically cleaned up if no changes are made.'
                 }
               </div>
-              {!worktree && (
-                <div style={{ color: '#444', fontSize: '11px', marginTop: '4px' }}>
-                  Enable --worktree for isolated parallel work on a branch.
-                </div>
-              )}
             </>
           )}
         </div>
