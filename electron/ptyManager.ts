@@ -35,7 +35,7 @@ export function createSession(
   cwd: string,
   resumeSessionId: string | null,
   skipPermissions: boolean,
-  worktree: boolean,
+  worktree: boolean | string,
   forkSession: boolean,
   onData: (data: string) => void,
   onExit: () => void
@@ -44,7 +44,7 @@ export function createSession(
   if (resumeSessionId) args.push('--resume', resumeSessionId)
   if (forkSession && resumeSessionId) args.push('--fork-session')
   if (skipPermissions) args.push('--dangerously-skip-permissions')
-  if (worktree) args.push('--worktree')
+  if (worktree) { args.push('--worktree'); if (typeof worktree === 'string') args.push(worktree) }
   let term: IPty
   try {
     term = pty.spawn('claude', args, {

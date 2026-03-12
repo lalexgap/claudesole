@@ -18,7 +18,7 @@ export interface ClaudeSession {
 }
 
 export interface ElectronAPI {
-  createSession: (sessionId: string, cwd: string, resumeSessionId?: string, skipPermissions?: boolean, worktree?: boolean, forkSession?: boolean) => void
+  createSession: (sessionId: string, cwd: string, resumeSessionId?: string, skipPermissions?: boolean, worktree?: boolean | string, forkSession?: boolean) => void
   createShellSession: (sessionId: string, cwd: string) => void
   latestSessionForCwd: (cwd: string) => Promise<string | null>
   writeSession: (sessionId: string, data: string) => void
@@ -35,7 +35,6 @@ export interface ElectronAPI {
   listWorktrees: (cwd: string) => Promise<Worktree[]>
   removeWorktree: (repoPath: string, worktreePath: string, force: boolean) => Promise<void>
   listBranches: (cwd: string) => Promise<string[]>
-  createWorktreeOnBranch: (cwd: string, branch: string) => Promise<string>
 }
 
 declare global {

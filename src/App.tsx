@@ -75,42 +75,21 @@ export default function App() {
     window.electronAPI?.setBadgeCount?.(waiting)
   }, [sessions])
 
-  const startSession = async (cwd: string, opts: SessionOpts, resumeOpts?: { sessionId: string; firstPrompt: string; claudeSessionId: string }) => {
-    let targetCwd = cwd
-    let useWorktree = opts.worktree
-    if (opts.worktree && opts.branch) {
-      try {
-        targetCwd = await window.electronAPI.createWorktreeOnBranch(cwd, opts.branch)
-        useWorktree = false
-      } catch (err) {
-        window.alert(`Failed to create worktree: ${err instanceof Error ? err.message : err}`)
-        return null
-      }
-    }
-    const sessionId = addSession(targetCwd, resumeOpts?.firstPrompt, undefined, resumeOpts?.claudeSessionId)
-    window.electronAPI.createSession(sessionId, targetCwd, resumeOpts?.claudeSessionId, opts.skipPermissions, useWorktree)
+  const startSession = (cwd: string, opts: SessionOpts, resumeOpts?: { sessionId: string; firstPrompt: string; claudeSessionId: string }) => {
+    const worktreeArg = opts.worktree ? (opts.branch || true) : false
+    const sessionId = addSession(cwd, resumeOpts?.firstPrompt, undefined, resumeOpts?.claudeSessionId)
+    window.electronAPI.createSession(sessionId, cwd, resumeOpts?.claudeSessionId, opts.skipPermissions, worktreeArg || undefined)
     return sessionId
   }
 
-  const handleResume = async (session: ClaudeSession, opts: SessionOpts) => {
-    const sessionId = await startSession(session.cwd, opts, { sessionId: session.sessionId, firstPrompt: session.firstPrompt, claudeSessionId: session.sessionId })
-    if (!sessionId) return
+  const handleResume = (session: ClaudeSession, opts: SessionOpts) => {
+    const sessionId = startSession(session.cwd, opts, { sessionId: session.sessionId, firstPrompt: session.firstPrompt, claudeSessionId: session.sessionId })
     closeModal()
     if (pendingSplit) handleSplitWithNew(sessionId)
   }
 
-  const handleNewInFolder = async (cwd: string, opts: SessionOpts) => {
-    const sessionId = await startSession(cwd, opts)
-    if (!sessionId) return
-    closeModal()
-    if (pendingSplit) handleSplitWithNew(sessionId)
-  }
-
-  const handleBrowse = async (opts: SessionOpts) => {
-    const cwd = await window.electronAPI.openDirectory()
-    if (!cwd) return
-    const sessionId = await startSession(cwd, opts)
-    if (!sessionId) return
+  const handleNewInFolder = (cwd: string, opts: SessionOpts) => {
+    const sessionId = startSession(cwd, opts)
     closeModal()
     if (pendingSplit) handleSplitWithNew(sessionId)
   }
@@ -409,7 +388,6 @@ export default function App() {
         <NewSessionModal
           onResume={handleResume}
           onNewInFolder={handleNewInFolder}
-          onBrowse={handleBrowse}
           onNewShell={handleNewShellInCwd}
           onShellBrowse={handleShellBrowse}
           onClose={closeModal}

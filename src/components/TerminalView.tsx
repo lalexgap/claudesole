@@ -25,7 +25,7 @@ export function TerminalView({ sessionId, isActive, isShell, onCmdK }: TerminalV
     setSearchQuery('')
   }, [])
 
-  useTerminal(sessionId, containerRef, openSearch, onCmdK ?? (() => {}), handleRef, isShell)
+  useTerminal(sessionId, containerRef, openSearch, onCmdK ?? (() => {}), handleRef, isShell, isActive)
 
   // Scroll to bottom whenever this terminal becomes the active one
   useEffect(() => {

@@ -23,21 +23,27 @@ export interface SessionOpts { skipPermissions: boolean; worktree: boolean; bran
 interface Props {
   onResume: (session: ClaudeSession, opts: SessionOpts) => void
   onNewInFolder: (cwd: string, opts: SessionOpts) => void
-  onBrowse: (opts: SessionOpts) => void
   onNewShell: (cwd: string) => void
   onShellBrowse: () => void
   onClose: () => void
 }
 
-export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onNewShell, onShellBrowse, onClose }: Props) {
+export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBrowse, onClose }: Props) {
   const [sessions, setSessions] = useState<ClaudeSession[]>([])
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
   const [hoveredSession, setHoveredSession] = useState<ClaudeSession | null>(null)
   const [skipPermissions, setSkipPermissions] = useState(true)
+
+  const [step, setStep] = useState<'pick' | 'options'>('pick')
+  const [pendingCwd, setPendingCwd] = useState<string | null>(null)
   const [worktree, setWorktree] = useState(false)
   const [branch, setBranch] = useState('')
   const [branches, setBranches] = useState<string[]>([])
+  const [branchSearch, setBranchSearch] = useState('')
+  const [branchOpen, setBranchOpen] = useState(false)
+  const [branchIdx, setBranchIdx] = useState(0)
+
   const searchRef = useRef<HTMLInputElement>(null)
   const itemRefs = useRef<Map<number, HTMLDivElement>>(new Map())
 
@@ -74,36 +80,63 @@ export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onNewShell,
     itemRefs.current.get(selected)?.scrollIntoView({ block: 'nearest' })
   }, [selected])
 
-  // Derive the cwd for the currently focused item (keyboard or hover)
-  const activeCwd: string | null = useMemo(() => {
-    if (hoveredSession) return hoveredSession.cwd
-    const item = items[selected]
-    if (!item) return null
-    if (item.type === 'session') return item.session.cwd
-    if (item.type === 'folder' || item.type === 'shellFolder') return item.cwd
-    return null
-  }, [hoveredSession, items, selected])
+  const activeSession: ClaudeSession | null =
+    hoveredSession ??
+    (selected < filteredSessions.length ? filteredSessions[selected] : null)
 
-  // Fetch branches when worktree is checked and active cwd changes
+  const branchInputRef = useRef<HTMLInputElement>(null)
+  const branchListRef = useRef<HTMLDivElement>(null)
+
+  const filteredBranches = useMemo(() =>
+    branches.filter(b => !branchSearch || b.toLowerCase().includes(branchSearch.toLowerCase())),
+    [branches, branchSearch]
+  )
+
   useEffect(() => {
-    if (!worktree || !activeCwd) { setBranches([]); setBranch(''); return }
-    window.electronAPI.listBranches(activeCwd).then(bs => {
-      setBranches(bs)
-      setBranch('')
-    })
-  }, [worktree, activeCwd])
+    if (worktree && pendingCwd) {
+      window.electronAPI.listBranches(pendingCwd).then(bs => { setBranches(bs); setBranchIdx(0) })
+    } else {
+      setBranches([])
+    }
+    setBranch('')
+    setBranchSearch('')
+    setBranchOpen(false)
+  }, [worktree, pendingCwd])
 
-  const opts: SessionOpts = { skipPermissions, worktree, branch: worktree && branch ? branch : undefined }
+  useEffect(() => {
+    branchListRef.current?.children[branchIdx]?.scrollIntoView({ block: 'nearest' })
+  }, [branchIdx])
+
+  const goToOptions = async (cwd?: string) => {
+    let target = cwd
+    if (!target) {
+      target = await window.electronAPI.openDirectory() ?? undefined
+      if (!target) return
+    }
+    setPendingCwd(target)
+    setWorktree(false)
+    setBranch('')
+    setBranches([])
+    setBranchSearch('')
+    setBranchOpen(false)
+    setStep('options')
+  }
+
+  const handleStart = useCallback(() => {
+    if (!pendingCwd) return
+    onNewInFolder(pendingCwd, { skipPermissions, worktree, branch: worktree && branch ? branch : undefined })
+  }, [pendingCwd, skipPermissions, worktree, branch, onNewInFolder])
 
   const activate = useCallback((item: Item) => {
-    if (item.type === 'session') onResume(item.session, opts)
-    else if (item.type === 'folder') onNewInFolder(item.cwd, opts)
-    else if (item.type === 'browse') onBrowse(opts)
+    if (item.type === 'session') onResume(item.session, { skipPermissions, worktree: false })
+    else if (item.type === 'folder') goToOptions(item.cwd)
+    else if (item.type === 'browse') goToOptions()
     else if (item.type === 'shellFolder') onNewShell(item.cwd)
     else onShellBrowse()
-  }, [onResume, onNewInFolder, onBrowse, onNewShell, onShellBrowse, skipPermissions, worktree])
+  }, [onResume, onNewShell, onShellBrowse, skipPermissions])
 
   useEffect(() => {
+    if (step !== 'pick') return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { onClose(); return }
       if (e.key === 'ArrowDown') { e.preventDefault(); setSelected(s => Math.min(s + 1, items.length - 1)) }
@@ -112,17 +145,30 @@ export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onNewShell,
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [items, selected, activate, onClose])
+  }, [step, items, selected, activate, onClose])
+
+  useEffect(() => {
+    if (step !== 'options') return
+    const onKey = (e: KeyboardEvent) => {
+      if (branchOpen) {
+        if (e.key === 'ArrowDown') { e.preventDefault(); setBranchIdx(i => Math.min(i + 1, filteredBranches.length - 1)) }
+        if (e.key === 'ArrowUp') { e.preventDefault(); setBranchIdx(i => Math.max(i - 1, 0)) }
+        if (e.key === 'Enter') { e.preventDefault(); const b = filteredBranches[branchIdx]; if (b) { setBranch(b); setBranchSearch(b); setBranchOpen(false) } }
+        if (e.key === 'Escape') { e.preventDefault(); setBranchOpen(false) }
+        return
+      }
+      if (e.key === 'Escape') { e.preventDefault(); setStep('pick') }
+      if (e.key === 'Enter') { e.preventDefault(); handleStart() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [step, branchOpen, branchIdx, filteredBranches, handleStart])
 
   const sessionOffset = 0
   const folderOffset = filteredSessions.length
   const browseOffset = folderOffset + recentFolders.length
   const shellFolderOffset = browseOffset + 1
   const shellBrowseOffset = shellFolderOffset + recentFolders.length
-
-  const activeSession: ClaudeSession | null =
-    hoveredSession ??
-    (selected < filteredSessions.length ? filteredSessions[selected] : null)
 
   const rowStyle = (idx: number): React.CSSProperties => ({
     padding: '8px 12px',
@@ -155,246 +201,302 @@ export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onNewShell,
           overflow: 'hidden',
         }}
       >
-        {/* Left: list */}
-        <div style={{ width: '360px', display: 'flex', flexDirection: 'column' }}>
-
-          {/* Header: search + checkbox */}
-          <div style={{ flexShrink: 0, borderBottom: '1px solid #272727' }}>
-            <div style={{ padding: '12px 14px 10px' }}>
-              <input
-                ref={searchRef}
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                placeholder="Search sessions…"
-                style={{
-                  width: '100%',
-                  background: 'transparent',
-                  border: 'none',
-                  outline: 'none',
-                  color: '#e5e5e5',
-                  fontSize: '14px',
-                }}
-              />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '0 14px 10px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+        {step === 'pick' ? (
+          /* ── Step 1: Session / folder picker ── */
+          <div style={{ width: '360px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flexShrink: 0, borderBottom: '1px solid #272727' }}>
+              <div style={{ padding: '12px 14px 10px' }}>
                 <input
-                  type="checkbox"
-                  checked={skipPermissions}
-                  onChange={e => setSkipPermissions(e.target.checked)}
-                  style={{ accentColor: '#4ade80', cursor: 'pointer' }}
+                  ref={searchRef}
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="Search sessions…"
+                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#e5e5e5', fontSize: '14px' }}
                 />
-                <span style={{ color: '#777', fontSize: '11px' }}>--dangerously-skip-permissions</span>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={worktree}
-                  onChange={e => { setWorktree(e.target.checked); setBranch(''); setBranches([]) }}
-                  style={{ accentColor: '#60a5fa', cursor: 'pointer' }}
-                />
-                <span style={{ color: '#777', fontSize: '11px' }}>--worktree</span>
-                {worktree && branches.length > 0 && (
-                  <select
-                    value={branch}
-                    onChange={e => setBranch(e.target.value)}
-                    onClick={e => e.stopPropagation()}
-                    style={{
-                      background: '#2a2a2a',
-                      border: '1px solid #3a3a3a',
-                      borderRadius: '4px',
-                      color: branch ? '#e5e5e5' : '#555',
-                      fontSize: '11px',
-                      padding: '2px 4px',
-                      cursor: 'pointer',
-                      outline: 'none',
-                      marginLeft: '4px',
-                    }}
-                  >
-                    <option value="">branch…</option>
-                    {branches.map(b => <option key={b} value={b}>{b}</option>)}
-                  </select>
-                )}
-              </label>
+              </div>
+              <div style={{ padding: '0 14px 10px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={skipPermissions}
+                    onChange={e => setSkipPermissions(e.target.checked)}
+                    style={{ accentColor: '#4ade80', cursor: 'pointer' }}
+                  />
+                  <span style={{ color: '#777', fontSize: '11px' }}>--dangerously-skip-permissions</span>
+                </label>
+              </div>
             </div>
-          </div>
 
-          {/* Sessions: scrollable */}
-          <div style={{ overflowY: 'auto', flex: 1 }}>
-            {filteredSessions.length > 0 && (
-              <>
-                <SectionLabel>Resume session</SectionLabel>
-                {filteredSessions.map((session, i) => (
-                  <div
-                    key={session.sessionId}
-                    ref={el => { if (el) itemRefs.current.set(sessionOffset + i, el); else itemRefs.current.delete(sessionOffset + i) }}
-                    style={rowStyle(sessionOffset + i)}
-                    onClick={() => onResume(session, opts)}
-                    onMouseEnter={() => { setSelected(sessionOffset + i); setHoveredSession(session) }}
-                    onMouseLeave={() => setHoveredSession(null)}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                      <span style={{ color: '#d4d4d4', fontWeight: 500, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {session.slug || session.projectName}
-                      </span>
-                      <span style={{ color: '#666', fontSize: '11px', marginLeft: 'auto', flexShrink: 0 }}>
-                        {relativeTime(session.lastActivity)}
-                      </span>
-                    </div>
-                    <div style={{ color: '#777', fontSize: '11px', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {session.projectName}{session.slug ? ` · ${session.cwd}` : ''}
-                    </div>
-                    {(session.latestPrompt || session.firstPrompt) && (
-                      <div style={{
-                        color: '#888',
-                        fontSize: '11px',
-                        lineHeight: '1.5',
-                        marginTop: '3px',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                      } as React.CSSProperties}>
-                        {session.latestPrompt || session.firstPrompt}
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {filteredSessions.length > 0 && (
+                <>
+                  <SectionLabel>Resume session</SectionLabel>
+                  {filteredSessions.map((session, i) => (
+                    <div
+                      key={session.sessionId}
+                      ref={el => { if (el) itemRefs.current.set(sessionOffset + i, el); else itemRefs.current.delete(sessionOffset + i) }}
+                      style={rowStyle(sessionOffset + i)}
+                      onClick={() => onResume(session, { skipPermissions, worktree: false })}
+                      onMouseEnter={() => { setSelected(sessionOffset + i); setHoveredSession(session) }}
+                      onMouseLeave={() => setHoveredSession(null)}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                        <span style={{ color: '#d4d4d4', fontWeight: 500, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {session.slug || session.projectName}
+                        </span>
+                        <span style={{ color: '#666', fontSize: '11px', marginLeft: 'auto', flexShrink: 0 }}>
+                          {relativeTime(session.lastActivity)}
+                        </span>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </>
-            )}
-            {filteredSessions.length === 0 && (
-              <div style={{ padding: '16px', color: '#555', fontSize: '12px' }}>
-                {query ? 'No matching sessions' : 'No recent sessions found'}
-              </div>
-            )}
-          </div>
-
-          {/* Footer: new session — always visible */}
-          <div style={{ flexShrink: 0, borderTop: '1px solid #272727' }}>
-            <SectionLabel style={{ paddingTop: '6px', paddingBottom: '2px' }}>New session</SectionLabel>
-            {recentFolders.map((cwd, i) => (
-              <div
-                key={cwd}
-                ref={el => { if (el) itemRefs.current.set(folderOffset + i, el); else itemRefs.current.delete(folderOffset + i) }}
-                style={{ ...rowStyle(folderOffset + i), display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px' }}
-                onClick={() => onNewInFolder(cwd, opts)}
-                onMouseEnter={() => { setSelected(folderOffset + i); setHoveredSession(null) }}
-              >
-                <span style={{ color: '#4ade80', fontSize: '11px', flexShrink: 0 }}>+</span>
-                <span style={{ color: '#d4d4d4', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                  {cwd.split('/').pop()}
-                </span>
-                <span style={{ color: '#555', fontSize: '10px', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>
-                  {cwd.split('/').slice(0, -1).join('/').replace('/Users/' + cwd.split('/')[2], '~')}
-                </span>
-              </div>
-            ))}
-            <div
-              ref={el => { if (el) itemRefs.current.set(browseOffset, el); else itemRefs.current.delete(browseOffset) }}
-              style={{ ...rowStyle(browseOffset), display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px', margin: '1px 4px 2px' }}
-              onClick={() => onBrowse(opts)}
-              onMouseEnter={() => { setSelected(browseOffset); setHoveredSession(null) }}
-            >
-              <span style={{ color: '#555', fontSize: '12px' }}>⊕</span>
-              <span style={{ color: '#888', fontSize: '12px' }}>Browse for folder…</span>
-            </div>
-
-            <SectionLabel style={{ paddingTop: '4px', paddingBottom: '2px' }}>New shell</SectionLabel>
-            {recentFolders.map((cwd, i) => (
-              <div
-                key={cwd}
-                ref={el => { if (el) itemRefs.current.set(shellFolderOffset + i, el); else itemRefs.current.delete(shellFolderOffset + i) }}
-                style={{ ...rowStyle(shellFolderOffset + i), display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px' }}
-                onClick={() => onNewShell(cwd)}
-                onMouseEnter={() => { setSelected(shellFolderOffset + i); setHoveredSession(null) }}
-              >
-                <span style={{ color: '#60a5fa', fontSize: '11px', flexShrink: 0, fontFamily: 'monospace' }}>$</span>
-                <span style={{ color: '#d4d4d4', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                  {cwd.split('/').pop()}
-                </span>
-                <span style={{ color: '#555', fontSize: '10px', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>
-                  {cwd.split('/').slice(0, -1).join('/').replace('/Users/' + cwd.split('/')[2], '~')}
-                </span>
-              </div>
-            ))}
-            <div
-              ref={el => { if (el) itemRefs.current.set(shellBrowseOffset, el); else itemRefs.current.delete(shellBrowseOffset) }}
-              style={{ ...rowStyle(shellBrowseOffset), display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px', margin: '1px 4px 4px' }}
-              onClick={onShellBrowse}
-              onMouseEnter={() => { setSelected(shellBrowseOffset); setHoveredSession(null) }}
-            >
-              <span style={{ color: '#60a5fa', fontSize: '11px', fontFamily: 'monospace' }}>$</span>
-              <span style={{ color: '#888', fontSize: '12px' }}>Shell in folder…</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: detail panel — always rendered to prevent width jumps */}
-        <div style={{ width: '280px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto', borderLeft: '1px solid #272727' }}>
-          {!activeSession && (
-            <div style={{ color: '#444', fontSize: '12px', marginTop: '8px' }}>Select a session to see details</div>
-          )}
-          {activeSession && (<>
-            <div>
-              <div style={{ color: '#e5e5e5', fontWeight: 600, fontSize: '13px', marginBottom: '2px' }}>
-                {activeSession.slug || activeSession.projectName}
-              </div>
-              {activeSession.slug && (
-                <div style={{ color: '#888', fontSize: '11px' }}>{activeSession.projectName}</div>
+                      <div style={{ color: '#777', fontSize: '11px', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {session.projectName}{session.slug ? ` · ${session.cwd}` : ''}
+                      </div>
+                      {(session.latestPrompt || session.firstPrompt) && (
+                        <div style={{
+                          color: '#888', fontSize: '11px', lineHeight: '1.5', marginTop: '3px',
+                          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                        } as React.CSSProperties}>
+                          {session.latestPrompt || session.firstPrompt}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </>
+              )}
+              {filteredSessions.length === 0 && (
+                <div style={{ padding: '16px', color: '#555', fontSize: '12px' }}>
+                  {query ? 'No matching sessions' : 'No recent sessions found'}
+                </div>
               )}
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <DetailLabel>Location</DetailLabel>
-              <div style={{ color: '#999', fontSize: '11px', wordBreak: 'break-all' }}>{activeSession.cwd}</div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <DetailLabel>Last active</DetailLabel>
-              <div style={{ color: '#999', fontSize: '11px' }}>{relativeTime(activeSession.lastActivity)}</div>
-            </div>
-
-            {activeSession.latestPrompt && activeSession.latestPrompt !== activeSession.firstPrompt && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <DetailLabel>Last prompt</DetailLabel>
-                <div style={{
-                  color: '#aaa',
-                  fontSize: '11px',
-                  lineHeight: '1.6',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 5,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                } as React.CSSProperties}>
-                  {activeSession.latestPrompt}
+            <div style={{ flexShrink: 0, borderTop: '1px solid #272727' }}>
+              <SectionLabel style={{ paddingTop: '6px', paddingBottom: '2px' }}>New session</SectionLabel>
+              {recentFolders.map((cwd, i) => (
+                <div
+                  key={cwd}
+                  ref={el => { if (el) itemRefs.current.set(folderOffset + i, el); else itemRefs.current.delete(folderOffset + i) }}
+                  style={{ ...rowStyle(folderOffset + i), display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px' }}
+                  onClick={() => goToOptions(cwd)}
+                  onMouseEnter={() => { setSelected(folderOffset + i); setHoveredSession(null) }}
+                >
+                  <span style={{ color: '#4ade80', fontSize: '11px', flexShrink: 0 }}>+</span>
+                  <span style={{ color: '#d4d4d4', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                    {cwd.split('/').pop()}
+                  </span>
+                  <span style={{ color: '#555', fontSize: '10px', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>
+                    {cwd.split('/').slice(0, -1).join('/').replace('/Users/' + cwd.split('/')[2], '~')}
+                  </span>
                 </div>
+              ))}
+              <div
+                ref={el => { if (el) itemRefs.current.set(browseOffset, el); else itemRefs.current.delete(browseOffset) }}
+                style={{ ...rowStyle(browseOffset), display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px', margin: '1px 4px 2px' }}
+                onClick={() => goToOptions()}
+                onMouseEnter={() => { setSelected(browseOffset); setHoveredSession(null) }}
+              >
+                <span style={{ color: '#555', fontSize: '12px' }}>⊕</span>
+                <span style={{ color: '#888', fontSize: '12px' }}>Browse for folder…</span>
               </div>
-            )}
 
-            {activeSession.firstPrompt && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <DetailLabel>First prompt</DetailLabel>
-                <div style={{
-                  color: '#666',
-                  fontSize: '11px',
-                  lineHeight: '1.6',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 5,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                } as React.CSSProperties}>
-                  {activeSession.firstPrompt}
+              <SectionLabel style={{ paddingTop: '4px', paddingBottom: '2px' }}>New shell</SectionLabel>
+              {recentFolders.map((cwd, i) => (
+                <div
+                  key={cwd}
+                  ref={el => { if (el) itemRefs.current.set(shellFolderOffset + i, el); else itemRefs.current.delete(shellFolderOffset + i) }}
+                  style={{ ...rowStyle(shellFolderOffset + i), display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px' }}
+                  onClick={() => onNewShell(cwd)}
+                  onMouseEnter={() => { setSelected(shellFolderOffset + i); setHoveredSession(null) }}
+                >
+                  <span style={{ color: '#60a5fa', fontSize: '11px', flexShrink: 0, fontFamily: 'monospace' }}>$</span>
+                  <span style={{ color: '#d4d4d4', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                    {cwd.split('/').pop()}
+                  </span>
+                  <span style={{ color: '#555', fontSize: '10px', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>
+                    {cwd.split('/').slice(0, -1).join('/').replace('/Users/' + cwd.split('/')[2], '~')}
+                  </span>
                 </div>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <DetailLabel>Session ID</DetailLabel>
-              <div style={{ color: '#555', fontSize: '10px', wordBreak: 'break-all' }}>
-                {activeSession.sessionId}
+              ))}
+              <div
+                ref={el => { if (el) itemRefs.current.set(shellBrowseOffset, el); else itemRefs.current.delete(shellBrowseOffset) }}
+                style={{ ...rowStyle(shellBrowseOffset), display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px', margin: '1px 4px 4px' }}
+                onClick={onShellBrowse}
+                onMouseEnter={() => { setSelected(shellBrowseOffset); setHoveredSession(null) }}
+              >
+                <span style={{ color: '#60a5fa', fontSize: '11px', fontFamily: 'monospace' }}>$</span>
+                <span style={{ color: '#888', fontSize: '12px' }}>Shell in folder…</span>
               </div>
             </div>
-          </>)}
+          </div>
+        ) : (
+          /* ── Step 2: New session options ── */
+          <div style={{ width: '360px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flexShrink: 0, borderBottom: '1px solid #272727', padding: '12px 14px' }}>
+              <button
+                onClick={() => setStep('pick')}
+                style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '13px', padding: 0, display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                ← Back
+              </button>
+            </div>
+
+            <div style={{ flex: 1, padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div>
+                <div style={{ color: '#666', fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>New session in</div>
+                <div style={{ color: '#e5e5e5', fontSize: '13px', fontWeight: 500 }}>{pendingCwd?.split('/').pop()}</div>
+                <div style={{ color: '#555', fontSize: '11px', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pendingCwd}</div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={skipPermissions}
+                    onChange={e => setSkipPermissions(e.target.checked)}
+                    style={{ accentColor: '#4ade80', cursor: 'pointer' }}
+                  />
+                  <span style={{ color: '#777', fontSize: '11px' }}>--dangerously-skip-permissions</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={worktree}
+                    onChange={e => setWorktree(e.target.checked)}
+                    style={{ accentColor: '#60a5fa', cursor: 'pointer' }}
+                  />
+                  <span style={{ color: '#777', fontSize: '11px' }}>--worktree</span>
+                </label>
+                {worktree && (
+                  <div style={{ position: 'relative', marginLeft: '20px' }}>
+                    <input
+                      ref={branchInputRef}
+                      value={branchSearch}
+                      onChange={e => { setBranchSearch(e.target.value); setBranch(''); setBranchOpen(true); setBranchIdx(0) }}
+                      onFocus={() => setBranchOpen(true)}
+                      onBlur={() => setTimeout(() => setBranchOpen(false), 150)}
+                      placeholder="Branch (optional)…"
+                      style={{
+                        width: '100%', boxSizing: 'border-box',
+                        background: '#252525', border: '1px solid #3a3a3a', borderRadius: '5px',
+                        color: branch ? '#e5e5e5' : '#aaa', fontSize: '12px',
+                        padding: '5px 8px', outline: 'none',
+                      }}
+                    />
+                    {branchOpen && filteredBranches.length > 0 && (
+                      <div
+                        ref={branchListRef}
+                        style={{
+                          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 10,
+                          background: '#252525', border: '1px solid #3a3a3a', borderRadius: '5px',
+                          maxHeight: '140px', overflowY: 'auto',
+                          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                        }}
+                      >
+                        {filteredBranches.map((b, i) => (
+                          <div
+                            key={b}
+                            onMouseDown={e => { e.preventDefault(); setBranch(b); setBranchSearch(b); setBranchOpen(false) }}
+                            style={{
+                              padding: '5px 8px', fontSize: '12px', cursor: 'pointer',
+                              color: i === branchIdx ? '#e5e5e5' : '#aaa',
+                              background: i === branchIdx ? 'rgba(255,255,255,0.07)' : 'transparent',
+                            }}
+                          >
+                            {b}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ flexShrink: 0, borderTop: '1px solid #272727', padding: '12px 16px' }}>
+              <button
+                onClick={handleStart}
+                style={{
+                  width: '100%', padding: '8px 16px',
+                  background: '#1d4ed8', border: 'none', borderRadius: '6px',
+                  color: '#e5e5e5', fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+                }}
+              >
+                Start session
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Right panel */}
+        <div style={{ width: '280px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto', borderLeft: '1px solid #272727' }}>
+          {step === 'pick' ? (
+            <>
+              {!activeSession && (
+                <div style={{ color: '#444', fontSize: '12px', marginTop: '8px' }}>Select a session to see details</div>
+              )}
+              {activeSession && (<>
+                <div>
+                  <div style={{ color: '#e5e5e5', fontWeight: 600, fontSize: '13px', marginBottom: '2px' }}>
+                    {activeSession.slug || activeSession.projectName}
+                  </div>
+                  {activeSession.slug && (
+                    <div style={{ color: '#888', fontSize: '11px' }}>{activeSession.projectName}</div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <DetailLabel>Location</DetailLabel>
+                  <div style={{ color: '#999', fontSize: '11px', wordBreak: 'break-all' }}>{activeSession.cwd}</div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <DetailLabel>Last active</DetailLabel>
+                  <div style={{ color: '#999', fontSize: '11px' }}>{relativeTime(activeSession.lastActivity)}</div>
+                </div>
+                {activeSession.latestPrompt && activeSession.latestPrompt !== activeSession.firstPrompt && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <DetailLabel>Last prompt</DetailLabel>
+                    <div style={{
+                      color: '#aaa', fontSize: '11px', lineHeight: '1.6',
+                      display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                    } as React.CSSProperties}>
+                      {activeSession.latestPrompt}
+                    </div>
+                  </div>
+                )}
+                {activeSession.firstPrompt && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <DetailLabel>First prompt</DetailLabel>
+                    <div style={{
+                      color: '#666', fontSize: '11px', lineHeight: '1.6',
+                      display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                    } as React.CSSProperties}>
+                      {activeSession.firstPrompt}
+                    </div>
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <DetailLabel>Session ID</DetailLabel>
+                  <div style={{ color: '#555', fontSize: '10px', wordBreak: 'break-all' }}>
+                    {activeSession.sessionId}
+                  </div>
+                </div>
+              </>)}
+            </>
+          ) : (
+            <>
+              <DetailLabel>--worktree</DetailLabel>
+              <div style={{ color: '#666', fontSize: '11px', lineHeight: '1.7' }}>
+                {branch
+                  ? <>Creates an isolated git worktree checked out to <span style={{ color: '#aaa' }}>{branch}</span>.</>
+                  : 'Creates an isolated git worktree on a new auto-named branch from the default remote. Automatically cleaned up if no changes are made.'
+                }
+              </div>
+              {!worktree && (
+                <div style={{ color: '#444', fontSize: '11px', marginTop: '4px' }}>
+                  Enable --worktree for isolated parallel work on a branch.
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

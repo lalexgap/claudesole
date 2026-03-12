@@ -1,5 +1,4 @@
 import { execFileSync } from 'child_process'
-import path from 'path'
 
 export interface GitInfo {
   branch: string | null
@@ -85,29 +84,6 @@ export function listBranches(cwd: string): string[] {
   }
 }
 
-function getRepoRoot(cwd: string): string | null {
-  try {
-    return execFileSync('git', ['-C', cwd, 'rev-parse', '--show-toplevel'], {
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim() || null
-  } catch {
-    return null
-  }
-}
-
-export function createWorktreeOnBranch(cwd: string, branch: string): string {
-  const repoRoot = getRepoRoot(cwd)
-  if (!repoRoot) throw new Error('Not a git repository')
-  const repoName = path.basename(repoRoot)
-  const safeBranch = branch.replace(/[^a-zA-Z0-9._-]/g, '-')
-  const worktreePath = path.join(path.dirname(repoRoot), `${repoName}-${safeBranch}`)
-  execFileSync('git', ['-C', repoRoot, 'worktree', 'add', worktreePath, branch], {
-    encoding: 'utf-8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  return worktreePath
-}
 
 export function getGitInfo(cwd: string): GitInfo | null {
   const run = (...args: string[]): string | null => {

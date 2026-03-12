@@ -18,6 +18,7 @@ export function useTerminal(
   onCmdK: () => void,
   handleRef: React.MutableRefObject<TerminalHandle | null>,
   isShell = false,
+  isActive = false,
 ) {
   const markRunning = useSessionsStore((s) => s.markRunning)
   const markWaiting = useSessionsStore((s) => s.markWaiting)
@@ -33,12 +34,14 @@ export function useTerminal(
   const markWaitingRef = useRef(markWaiting)
   const removeSessionRef = useRef(removeSession)
   const isShellRef = useRef(isShell)
+  const isActiveRef = useRef(isActive)
   useEffect(() => { onCmdFRef.current = onCmdF })
   useEffect(() => { onCmdKRef.current = onCmdK })
   useEffect(() => { markRunningRef.current = markRunning })
   useEffect(() => { markWaitingRef.current = markWaiting })
   useEffect(() => { removeSessionRef.current = removeSession })
   useEffect(() => { isShellRef.current = isShell })
+  useEffect(() => { isActiveRef.current = isActive })
 
   useEffect(() => {
     const container = containerRef.current
@@ -124,7 +127,7 @@ export function useTerminal(
           !isShellRef.current &&
           claudeRespondedRef.current &&
           !notifiedIdleRef.current &&
-          !document.hasFocus() &&
+          (!isActiveRef.current || !document.hasFocus()) &&
           Notification.permission === 'granted'
         claudeRespondedRef.current = false
         if (shouldNotify) {

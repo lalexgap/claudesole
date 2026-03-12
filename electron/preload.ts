@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  createSession: (sessionId: string, cwd: string, resumeSessionId?: string, skipPermissions?: boolean, worktree?: boolean, forkSession?: boolean) =>
+  createSession: (sessionId: string, cwd: string, resumeSessionId?: string, skipPermissions?: boolean, worktree?: boolean | string, forkSession?: boolean) =>
     ipcRenderer.send('pty:create', { sessionId, cwd, resumeSessionId, skipPermissions, worktree, forkSession }),
 
   createShellSession: (sessionId: string, cwd: string) =>
@@ -62,6 +62,4 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listBranches: (cwd: string): Promise<string[]> =>
     ipcRenderer.invoke('git:listBranches', cwd),
 
-  createWorktreeOnBranch: (cwd: string, branch: string): Promise<string> =>
-    ipcRenderer.invoke('git:createWorktreeOnBranch', { cwd, branch }),
 })
