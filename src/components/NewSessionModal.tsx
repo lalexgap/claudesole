@@ -50,7 +50,9 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
 
   useEffect(() => {
     searchRef.current?.focus()
-    window.electronAPI.listSessions().then(setSessions)
+    window.electronAPI.listSessions().then(all =>
+      setSessions(all.filter(s => !s.cwd.includes('/.claude/worktrees/')))
+    )
   }, [])
 
   const q = query.toLowerCase()
