@@ -90,8 +90,12 @@ export function Tab({ session, isActive, onClick, onClose, onRename, onPin, onFo
         {session.pinned && (
           <span style={{ fontSize: '9px', color: '#f6c90e', flexShrink: 0, lineHeight: 1 }}>★</span>
         )}
-        {isShell && (
+        {isShell ? (
           <span style={{ fontSize: '10px', color: '#60a5fa', flexShrink: 0, lineHeight: 1, opacity: 0.8 }}>$</span>
+        ) : (
+          <span style={{ fontSize: '11px', flexShrink: 0, lineHeight: 1 }}>
+            {session.status === 'running' ? '🤖' : '👤'}
+          </span>
         )}
         {editing ? (
           <input
