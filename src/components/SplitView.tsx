@@ -38,6 +38,11 @@ export function splitLeaf(
   }
 }
 
+export function replaceLeaf(root: PaneNode, targetId: string, newId: string): PaneNode {
+  if (root.type === 'leaf') return root.sessionId === targetId ? { type: 'leaf', sessionId: newId } : root
+  return { ...root, first: replaceLeaf(root.first, targetId, newId), second: replaceLeaf(root.second, targetId, newId) }
+}
+
 export function removeFromTree(root: PaneNode, sessionId: string): PaneNode | null {
   if (root.type === 'leaf') return root.sessionId === sessionId ? null : root
   const first = removeFromTree(root.first, sessionId)

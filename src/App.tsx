@@ -5,7 +5,7 @@ import { TerminalView } from './components/TerminalView'
 import { NewSessionModal, SessionOpts } from './components/NewSessionModal'
 import { SessionSidebar } from './components/SessionSidebar'
 import { SessionHistoryPanel } from './components/SessionHistoryPanel'
-import { SplitView, PaneNode, splitLeaf, removeFromTree, getLeafIds } from './components/SplitView'
+import { SplitView, PaneNode, splitLeaf, replaceLeaf, removeFromTree, getLeafIds } from './components/SplitView'
 import { QuickSwitcher } from './components/QuickSwitcher'
 import { WorktreePanel } from './components/WorktreePanel'
 import { ClaudeSession } from './types/ipc'
@@ -211,7 +211,19 @@ export default function App() {
       <TabBar
         sessions={sessions}
         activeId={activeId}
-        onSelectTab={setActive}
+        onSelectTab={(id) => {
+            if (paneRoot && focusedPaneId) {
+              // If already in the pane tree, just focus that pane
+              if (getLeafIds(paneRoot).includes(id)) {
+                setFocusedPaneId(id)
+              } else {
+                // Replace the focused pane with the selected tab
+                setPaneRoot(prev => prev ? replaceLeaf(prev, focusedPaneId, id) : null)
+                setFocusedPaneId(id)
+              }
+            }
+            setActive(id)
+          }}
         onCloseTab={handleCloseTab}
         onNewTab={openModal}
         onNewShellTab={handleNewShellTab}
