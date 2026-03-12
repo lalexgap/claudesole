@@ -1,9 +1,12 @@
 import React, { useState, useRef } from 'react'
 import { Session, useSessionsStore } from '../store/sessions'
 import { Tab } from './Tab'
+import { PaneNode, getLeafIds } from './SplitView'
 
 interface TabBarProps {
   sessions: Session[]
+  allSessions: Session[]
+  paneRoots: Map<string, PaneNode>
   activeId: string | null
   onSelectTab: (id: string) => void
   onCloseTab: (id: string) => void
@@ -23,11 +26,18 @@ interface TabBarProps {
 }
 
 export function TabBar({
-  sessions, activeId, onSelectTab, onCloseTab, onNewTab, onNewShellTab,
+  sessions, allSessions, paneRoots, activeId, onSelectTab, onCloseTab, onNewTab, onNewShellTab,
   onRenameTab, onPinTab, onForkTab, onSplitHTab, onSplitVTab,
   historyOpen, onToggleHistory, sidebarOpen, onToggleSidebar,
   worktreesOpen, onToggleWorktrees,
 }: TabBarProps) {
+  const getSplitLabel = (session: Session): string | undefined => {
+    const root = paneRoots.get(session.id)
+    if (!root) return undefined
+    const leafIds = getLeafIds(root)
+    if (leafIds.length <= 1) return undefined
+    return leafIds.map(id => allSessions.find(s => s.id === id)?.label ?? id).join('/')
+  }
   const reorderSession = useSessionsStore((s) => s.reorderSession)
   const dragId = useRef<string | null>(null)
   const [insertIndex, setInsertIndex] = useState<number | null>(null)
@@ -88,6 +98,7 @@ export function TabBar({
           <Tab
             session={session}
             isActive={session.id === activeId}
+            splitLabel={getSplitLabel(session)}
             onClick={() => onSelectTab(session.id)}
             onClose={(e) => { e.stopPropagation(); onCloseTab(session.id) }}
             onRename={(label) => onRenameTab(session.id, label)}

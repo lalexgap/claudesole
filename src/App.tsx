@@ -5,7 +5,7 @@ import { TerminalView } from './components/TerminalView'
 import { NewSessionModal, SessionOpts } from './components/NewSessionModal'
 import { SessionSidebar } from './components/SessionSidebar'
 import { SessionHistoryPanel } from './components/SessionHistoryPanel'
-import { SplitView, PaneNode, splitLeaf, replaceLeaf, removeFromTree, getLeafIds } from './components/SplitView'
+import { SplitView, PaneNode, splitLeaf, removeFromTree, getLeafIds } from './components/SplitView'
 import { QuickSwitcher } from './components/QuickSwitcher'
 import { WorktreePanel } from './components/WorktreePanel'
 import { ClaudeSession } from './types/ipc'
@@ -17,8 +17,23 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false)
   const [showSwitcher, setShowSwitcher] = useState(false)
   const [showWorktrees, setShowWorktrees] = useState(false)
-  const [paneRoot, setPaneRoot] = useState<PaneNode | null>(null)
-  const [focusedPaneId, setFocusedPaneId] = useState<string | null>(null)
+
+  // Map from primary session ID → pane tree for that tab's split layout
+  const [paneRoots, setPaneRoots] = useState<Map<string, PaneNode>>(new Map())
+  // Map from primary session ID → currently focused session ID within that tab
+  const [focusedPanes, setFocusedPanes] = useState<Map<string, string>>(new Map())
+
+  // Derive the active tab's pane root and focused pane ID
+  const activePaneRoot = activeId ? (paneRoots.get(activeId) ?? null) : null
+  const activeFocusedId = activeId ? (focusedPanes.get(activeId) ?? activeId) : null
+
+  // Compute which sessions are "secondary" (in a split but not the owner/primary)
+  const allSplitLeafIds = new Set([...paneRoots.values()].flatMap(root => getLeafIds(root)))
+  const splitPrimaryIds = new Set(paneRoots.keys())
+  const splitSecondaryIds = new Set([...allSplitLeafIds].filter(id => !splitPrimaryIds.has(id)))
+
+  // Only show non-secondary sessions in the tab bar
+  const tabSessions = sessions.filter(s => !splitSecondaryIds.has(s.id))
 
   const openModal = () => setShowModal(true)
   const closeModal = () => setShowModal(false)
@@ -66,41 +81,54 @@ export default function App() {
       const ok = window.confirm(`Close "${session.label}"? Claude may still be running.`)
       if (!ok) return
     }
+
+    // If this session has a split, also close all secondary sessions in it
+    const root = paneRoots.get(id)
+    if (root) {
+      const leafIds = getLeafIds(root).filter(leafId => leafId !== id)
+      leafIds.forEach(leafId => {
+        window.electronAPI.killSession(leafId)
+        removeSession(leafId)
+      })
+      setPaneRoots(prev => { const m = new Map(prev); m.delete(id); return m })
+      setFocusedPanes(prev => { const m = new Map(prev); m.delete(id); return m })
+    }
+
+    // Also check if this session is a secondary in someone else's split — remove it from there
+    for (const [primaryId, primaryRoot] of paneRoots) {
+      if (primaryId !== id && getLeafIds(primaryRoot).includes(id)) {
+        const newRoot = removeFromTree(primaryRoot, id)
+        if (!newRoot || newRoot.type === 'leaf') {
+          setPaneRoots(prev => { const m = new Map(prev); m.delete(primaryId); return m })
+          setFocusedPanes(prev => { const m = new Map(prev); m.delete(primaryId); return m })
+        } else {
+          setPaneRoots(prev => new Map([...prev, [primaryId, newRoot]]))
+        }
+      }
+    }
+
     window.electronAPI.killSession(id)
     removeSession(id)
-    // Remove from split tree
-    setPaneRoot(prev => {
-      if (!prev) return null
-      const next = removeFromTree(prev, id)
-      if (!next || next.type === 'leaf') {
-        // Collapsed to one or zero panes — exit split mode
-        setFocusedPaneId(next?.sessionId ?? null)
-        return null
-      }
-      if (focusedPaneId === id) {
-        setFocusedPaneId(getLeafIds(next)[0] ?? null)
-      }
-      return next
-    })
-  }, [sessions, focusedPaneId, removeSession])
+  }, [sessions, paneRoots, removeSession])
 
   const [pendingSplit, setPendingSplit] = useState<{ sourceId: string; dir: 'h' | 'v' } | null>(null)
 
   const handleSplit = (id: string, dir: 'h' | 'v') => {
-    const focusedId = paneRoot ? focusedPaneId : activeId
-    if (!focusedId) return
+    const primaryId = activeId
+    if (!primaryId) return
+    const focusedId = focusedPanes.get(primaryId) ?? primaryId
     if (focusedId === id) {
-      // Splitting the active tab itself — open modal to pick what goes in the new pane
-      setPendingSplit({ sourceId: id, dir })
+      // Splitting with self — open session picker
+      setPendingSplit({ sourceId: primaryId, dir })
       setShowModal(true)
       return
     }
-    if (paneRoot === null) {
-      setPaneRoot({ type: 'split', dir, ratio: 0.5, first: { type: 'leaf', sessionId: focusedId }, second: { type: 'leaf', sessionId: id } })
-    } else {
-      setPaneRoot(prev => prev ? splitLeaf(prev, focusedId, dir, id) : { type: 'leaf', sessionId: id })
-    }
-    setFocusedPaneId(id)
+    const currentRoot = paneRoots.get(primaryId) ?? { type: 'leaf' as const, sessionId: primaryId }
+    const newRoot = !paneRoots.has(primaryId)
+      ? { type: 'split' as const, dir, ratio: 0.5, first: { type: 'leaf' as const, sessionId: focusedId }, second: { type: 'leaf' as const, sessionId: id } }
+      : splitLeaf(currentRoot, focusedId, dir, id)
+    setPaneRoots(prev => new Map([...prev, [primaryId, newRoot]]))
+    setFocusedPanes(prev => new Map([...prev, [primaryId, id]]))
     setActive(id)
   }
 
@@ -108,18 +136,19 @@ export default function App() {
     if (!pendingSplit) return
     const { sourceId, dir } = pendingSplit
     setPendingSplit(null)
-    if (paneRoot === null) {
-      setPaneRoot({ type: 'split', dir, ratio: 0.5, first: { type: 'leaf', sessionId: sourceId }, second: { type: 'leaf', sessionId: newId } })
-    } else {
-      setPaneRoot(prev => prev ? splitLeaf(prev, sourceId, dir, newId) : { type: 'leaf', sessionId: newId })
-    }
-    setFocusedPaneId(newId)
+    const currentRoot = paneRoots.get(sourceId) ?? { type: 'leaf' as const, sessionId: sourceId }
+    const focusedId = focusedPanes.get(sourceId) ?? sourceId
+    const newRoot = !paneRoots.has(sourceId)
+      ? { type: 'split' as const, dir, ratio: 0.5, first: { type: 'leaf' as const, sessionId: sourceId }, second: { type: 'leaf' as const, sessionId: newId } }
+      : splitLeaf(currentRoot, focusedId, dir, newId)
+    setPaneRoots(prev => new Map([...prev, [sourceId, newRoot]]))
+    setFocusedPanes(prev => new Map([...prev, [sourceId, newId]]))
     setActive(newId)
   }
 
   const handlePaneFocus = (id: string) => {
-    setFocusedPaneId(id)
-    setActive(id)
+    if (!activeId) return
+    setFocusedPanes(prev => new Map([...prev, [activeId, id]]))
   }
 
   const handleNewShellInCwd = (cwd: string) => {
@@ -197,31 +226,26 @@ export default function App() {
       const n = parseInt(e.key)
       if (n >= 1 && n <= 9) {
         e.preventDefault()
-        const sorted = [...sessions].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+        const sorted = [...tabSessions].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
         const target = sorted[n - 1]
         if (target) setActive(target.id)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [activeId, sessions, showModal, showHistory, showSwitcher, showWorktrees, handleCloseTab])
+  }, [activeId, tabSessions, showModal, showHistory, showSwitcher, showWorktrees, handleCloseTab])
+
+  // Determine which session IDs are in the active split (if any)
+  const activeSplitLeafIds = activePaneRoot ? new Set(getLeafIds(activePaneRoot)) : null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
       <TabBar
-        sessions={sessions}
+        sessions={tabSessions}
+        allSessions={sessions}
+        paneRoots={paneRoots}
         activeId={activeId}
         onSelectTab={(id) => {
-            if (paneRoot && focusedPaneId) {
-              // If already in the pane tree, just focus that pane
-              if (getLeafIds(paneRoot).includes(id)) {
-                setFocusedPaneId(id)
-              } else {
-                // Replace the focused pane with the selected tab
-                setPaneRoot(prev => prev ? replaceLeaf(prev, focusedPaneId, id) : null)
-                setFocusedPaneId(id)
-              }
-            }
             setActive(id)
           }}
         onCloseTab={handleCloseTab}
@@ -263,17 +287,17 @@ export default function App() {
             </div>
           )}
 
-          {paneRoot ? (
+          {activePaneRoot ? (
             <>
-              {/* Keep non-visible sessions alive offscreen so xterm state is preserved */}
-              {sessions.filter(s => !getLeafIds(paneRoot).includes(s.id)).map(s => (
+              {/* Keep sessions not in the active split alive offscreen (single sessions + secondary sessions of other tabs) */}
+              {sessions.filter(s => !activeSplitLeafIds!.has(s.id)).map(s => (
                 <div key={s.id} style={{ position: 'absolute', left: '-9999px', top: 0, width: '800px', height: '600px' }}>
                   <TerminalView sessionId={s.id} isActive={false} isShell={s.type === 'shell'} onCmdK={() => setShowSwitcher(true)} />
                 </div>
               ))}
-              {/* Split layout */}
+              {/* Split layout for the active tab */}
               <div style={{ position: 'absolute', inset: 0 }}>
-                <SplitView node={paneRoot} sessions={sessions} focusedId={focusedPaneId} onFocus={handlePaneFocus} onCmdK={() => setShowSwitcher(true)} />
+                <SplitView node={activePaneRoot} sessions={sessions} focusedId={activeFocusedId} onFocus={handlePaneFocus} onCmdK={() => setShowSwitcher(true)} />
               </div>
             </>
           ) : (

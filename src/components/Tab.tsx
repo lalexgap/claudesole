@@ -4,6 +4,7 @@ import { Session } from '../store/sessions'
 interface TabProps {
   session: Session
   isActive: boolean
+  splitLabel?: string
   onClick: () => void
   onClose: (e: React.MouseEvent) => void
   onRename: (label: string) => void
@@ -16,7 +17,7 @@ interface TabProps {
   onDragEnd?: () => void
 }
 
-export function Tab({ session, isActive, onClick, onClose, onRename, onPin, onFork, onSplitH, onSplitV, onDragStart, onDragOver, onDragEnd }: TabProps) {
+export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename, onPin, onFork, onSplitH, onSplitV, onDragStart, onDragOver, onDragEnd }: TabProps) {
   const divRef = useRef<HTMLDivElement>(null)
   const [draggable, setDraggable] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -123,7 +124,7 @@ export function Tab({ session, isActive, onClick, onClose, onRename, onPin, onFo
           />
         ) : (
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-            {session.label}
+            {splitLabel ?? session.label}
           </span>
         )}
         <span
