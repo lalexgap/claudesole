@@ -77,7 +77,7 @@ export default function App() {
 
   const startSession = (cwd: string, opts: SessionOpts, resumeOpts?: { sessionId: string; firstPrompt: string; claudeSessionId: string }) => {
     const worktreeArg = opts.worktree ? (opts.branch || true) : false
-    const sessionId = addSession(cwd, resumeOpts?.firstPrompt, undefined, resumeOpts?.claudeSessionId)
+    const sessionId = addSession(cwd, resumeOpts?.firstPrompt, undefined, resumeOpts?.claudeSessionId, 'claude', !!worktreeArg)
     window.electronAPI.createSession(sessionId, cwd, resumeOpts?.claudeSessionId, opts.skipPermissions, worktreeArg || undefined)
     return sessionId
   }

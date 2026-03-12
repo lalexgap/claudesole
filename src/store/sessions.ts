@@ -12,12 +12,13 @@ export interface Session {
   pinned: boolean
   type: 'claude' | 'shell'
   claudeSessionId?: string // the Claude-assigned session UUID (known for resumed sessions)
+  isWorktree?: boolean
 }
 
 interface SessionsState {
   sessions: Session[]
   activeId: string | null
-  addSession: (cwd: string, firstPrompt?: string, label?: string, claudeSessionId?: string, type?: 'claude' | 'shell') => string
+  addSession: (cwd: string, firstPrompt?: string, label?: string, claudeSessionId?: string, type?: 'claude' | 'shell', isWorktree?: boolean) => string
   removeSession: (id: string) => void
   setActive: (id: string) => void
   markRunning: (id: string) => void
@@ -31,10 +32,10 @@ export const useSessionsStore = create<SessionsState>((set) => ({
   sessions: [],
   activeId: null,
 
-  addSession: (cwd: string, firstPrompt = '', label?: string, claudeSessionId?: string, type: 'claude' | 'shell' = 'claude') => {
+  addSession: (cwd: string, firstPrompt = '', label?: string, claudeSessionId?: string, type: 'claude' | 'shell' = 'claude', isWorktree?: boolean) => {
     const id = nanoid()
     const sessionLabel = label || cwd.split('/').pop() || cwd
-    const session: Session = { id, cwd, label: sessionLabel, status: 'running', firstPrompt, pinned: false, type, claudeSessionId }
+    const session: Session = { id, cwd, label: sessionLabel, status: 'running', firstPrompt, pinned: false, type, claudeSessionId, isWorktree }
     set((state) => ({ sessions: [...state.sessions, session], activeId: id }))
     return id
   },

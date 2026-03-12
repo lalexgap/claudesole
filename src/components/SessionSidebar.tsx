@@ -97,8 +97,20 @@ export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, 
                 }}>
                   {session.label}
                 </div>
+                {session.isWorktree && (
+                  <span style={{
+                    fontSize: '8px', color: '#60a5fa',
+                    background: 'rgba(96,165,250,0.12)',
+                    border: '1px solid rgba(96,165,250,0.3)',
+                    borderRadius: '3px', padding: '1px 4px',
+                    textTransform: 'uppercase', letterSpacing: '0.05em',
+                    alignSelf: 'flex-start',
+                  }}>
+                    wt
+                  </span>
+                )}
                 <div style={{
-                  color: '#666', fontSize: '10px', marginTop: '1px',
+                  color: '#666', fontSize: '10px',
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>
                   {session.cwd}
