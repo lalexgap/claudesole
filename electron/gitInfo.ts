@@ -73,9 +73,10 @@ export function removeWorktree(repoPath: string, worktreePath: string, force: bo
   })
 }
 
-export function createWorktree(repoPath: string, newBranch: string, baseBranch: string): string {
-  const worktreePath = path.join(repoPath, '.claude', 'worktrees', newBranch)
-  execFileSync('git', ['-C', repoPath, 'worktree', 'add', '-b', newBranch, worktreePath, baseBranch], {
+export function createWorktree(repoPath: string, branch: string): string {
+  const dirName = branch.replace(/\//g, '-')
+  const worktreePath = path.join(repoPath, '.claude', 'worktrees', dirName)
+  execFileSync('git', ['-C', repoPath, 'worktree', 'add', worktreePath, branch], {
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'pipe'],
   })

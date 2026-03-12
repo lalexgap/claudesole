@@ -39,9 +39,9 @@ function setupIpcHandlers() {
     try { return listBranches(validateDir(cwd)) } catch { return [] }
   })
 
-  ipcMain.handle('git:createWorktree', (_event, { repoPath, newBranch, baseBranch }: { repoPath: string; newBranch: string; baseBranch: string }) => {
+  ipcMain.handle('git:createWorktree', (_event, { repoPath, branch }: { repoPath: string; branch: string }) => {
     try {
-      return createWorktree(validateDir(repoPath), newBranch, baseBranch)
+      return createWorktree(validateDir(repoPath), branch)
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to create worktree')
     }

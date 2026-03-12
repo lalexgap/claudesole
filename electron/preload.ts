@@ -62,7 +62,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listBranches: (cwd: string): Promise<string[]> =>
     ipcRenderer.invoke('git:listBranches', cwd),
 
-  createWorktree: (repoPath: string, newBranch: string, baseBranch: string): Promise<string> =>
-    ipcRenderer.invoke('git:createWorktree', { repoPath, newBranch, baseBranch }),
+  createWorktree: (repoPath: string, branch: string): Promise<string> =>
+    ipcRenderer.invoke('git:createWorktree', { repoPath, branch }),
 
 })

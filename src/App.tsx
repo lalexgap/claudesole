@@ -80,15 +80,15 @@ export default function App() {
     let worktreeArg: boolean | string | undefined = undefined
 
     if (opts.worktree) {
-      if (opts.baseBranch && opts.newBranchName) {
+      if (opts.branch) {
         try {
-          sessionCwd = await window.electronAPI.createWorktree(cwd, opts.newBranchName, opts.baseBranch)
+          sessionCwd = await window.electronAPI.createWorktree(cwd, opts.branch)
         } catch (err) {
           alert(`Failed to create worktree: ${err instanceof Error ? err.message : err}`)
           return ''
         }
       } else {
-        worktreeArg = opts.newBranchName || true
+        worktreeArg = true
       }
     }
 

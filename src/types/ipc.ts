@@ -35,7 +35,7 @@ export interface ElectronAPI {
   listWorktrees: (cwd: string) => Promise<Worktree[]>
   removeWorktree: (repoPath: string, worktreePath: string, force: boolean) => Promise<void>
   listBranches: (cwd: string) => Promise<string[]>
-  createWorktree: (repoPath: string, newBranch: string, baseBranch: string) => Promise<string>
+  createWorktree: (repoPath: string, branch: string) => Promise<string>
 }
 
 declare global {
