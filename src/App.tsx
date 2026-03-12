@@ -315,6 +315,7 @@ export default function App() {
             const splitRect = splitLayoutMap.get(session.id)
             const isNonSplitActive = !activePaneRoot && session.id === activeId && !showHistory
             const isFocused = splitRect !== undefined && session.id === activeFocusedId
+            const isVisible = !!splitRect || isNonSplitActive
 
             let style: React.CSSProperties
             if (splitRect) {
@@ -327,12 +328,17 @@ export default function App() {
                 height: splitRect.height,
                 outline: isFocused ? '1px solid rgba(74,222,128,0.35)' : '1px solid #1e1e1e',
                 outlineOffset: '-1px',
+                zIndex: 1,
               }
-            } else if (isNonSplitActive) {
-              style = { position: 'absolute', inset: 0 }
             } else {
-              // Offscreen — keep xterm alive but out of view
-              style = { position: 'absolute', left: '-9999px', top: 0, width: '800px', height: '600px' }
+              // Non-split: fill the container. Use visibility (not left:-9999px) so
+              // dimensions stay constant and ResizeObserver never fires a spurious resize.
+              style = {
+                position: 'absolute',
+                inset: 0,
+                visibility: isNonSplitActive ? 'visible' : 'hidden',
+                zIndex: isNonSplitActive ? 1 : 0,
+              }
             }
 
             return (
@@ -343,7 +349,7 @@ export default function App() {
               >
                 <TerminalView
                   sessionId={session.id}
-                  isActive={isNonSplitActive || isFocused}
+                  isActive={isVisible && (isNonSplitActive || isFocused)}
                   isShell={session.type === 'shell'}
                   onCmdK={() => setShowSwitcher(true)}
                 />
