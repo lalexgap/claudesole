@@ -18,7 +18,7 @@ type Item =
   | { type: 'shellFolder'; cwd: string }
   | { type: 'shellBrowse' }
 
-export interface SessionOpts { skipPermissions: boolean; worktree: boolean }
+export interface SessionOpts { skipPermissions: boolean; worktree: boolean; branch?: string }
 
 interface Props {
   onResume: (session: ClaudeSession, opts: SessionOpts) => void
@@ -36,6 +36,8 @@ export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onNewShell,
   const [hoveredSession, setHoveredSession] = useState<ClaudeSession | null>(null)
   const [skipPermissions, setSkipPermissions] = useState(true)
   const [worktree, setWorktree] = useState(false)
+  const [branch, setBranch] = useState('')
+  const [branches, setBranches] = useState<string[]>([])
   const searchRef = useRef<HTMLInputElement>(null)
   const itemRefs = useRef<Map<number, HTMLDivElement>>(new Map())
 
@@ -72,7 +74,26 @@ export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onNewShell,
     itemRefs.current.get(selected)?.scrollIntoView({ block: 'nearest' })
   }, [selected])
 
-  const opts: SessionOpts = { skipPermissions, worktree }
+  // Derive the cwd for the currently focused item (keyboard or hover)
+  const activeCwd: string | null = useMemo(() => {
+    if (hoveredSession) return hoveredSession.cwd
+    const item = items[selected]
+    if (!item) return null
+    if (item.type === 'session') return item.session.cwd
+    if (item.type === 'folder' || item.type === 'shellFolder') return item.cwd
+    return null
+  }, [hoveredSession, items, selected])
+
+  // Fetch branches when worktree is checked and active cwd changes
+  useEffect(() => {
+    if (!worktree || !activeCwd) { setBranches([]); setBranch(''); return }
+    window.electronAPI.listBranches(activeCwd).then(bs => {
+      setBranches(bs)
+      setBranch('')
+    })
+  }, [worktree, activeCwd])
+
+  const opts: SessionOpts = { skipPermissions, worktree, branch: worktree && branch ? branch : undefined }
 
   const activate = useCallback((item: Item) => {
     if (item.type === 'session') onResume(item.session, opts)
@@ -169,10 +190,31 @@ export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onNewShell,
                 <input
                   type="checkbox"
                   checked={worktree}
-                  onChange={e => setWorktree(e.target.checked)}
+                  onChange={e => { setWorktree(e.target.checked); setBranch(''); setBranches([]) }}
                   style={{ accentColor: '#60a5fa', cursor: 'pointer' }}
                 />
                 <span style={{ color: '#777', fontSize: '11px' }}>--worktree</span>
+                {worktree && branches.length > 0 && (
+                  <select
+                    value={branch}
+                    onChange={e => setBranch(e.target.value)}
+                    onClick={e => e.stopPropagation()}
+                    style={{
+                      background: '#2a2a2a',
+                      border: '1px solid #3a3a3a',
+                      borderRadius: '4px',
+                      color: branch ? '#e5e5e5' : '#555',
+                      fontSize: '11px',
+                      padding: '2px 4px',
+                      cursor: 'pointer',
+                      outline: 'none',
+                      marginLeft: '4px',
+                    }}
+                  >
+                    <option value="">branch…</option>
+                    {branches.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                )}
               </label>
             </div>
           </div>

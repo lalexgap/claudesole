@@ -51,11 +51,11 @@ export function WorktreePanel({ sessions, onOpenSession, onClose }: Props) {
         }
       }))
 
-      // Deduplicate by path, group by repoRoot
+      // Deduplicate by path, group by repoRoot — skip main worktrees
       const seen = new Set<string>()
       const byRepo = new Map<string, Worktree[]>()
       for (const wt of allWorktrees) {
-        if (seen.has(wt.path)) continue
+        if (wt.isMain || seen.has(wt.path)) continue
         seen.add(wt.path)
         const list = byRepo.get(wt.repoRoot) ?? []
         list.push(wt)
@@ -201,7 +201,7 @@ export function WorktreePanel({ sessions, onOpenSession, onClose }: Props) {
 
         {!loading && worktreesByRepo.size === 0 && (
           <div style={{ padding: '16px 14px', color: '#555', fontSize: '12px' }}>
-            No git worktrees found in open sessions.
+            No linked worktrees found. Create one with <code style={{ fontFamily: 'monospace', background: 'rgba(255,255,255,0.06)', padding: '1px 4px', borderRadius: '3px' }}>git worktree add</code> or use --worktree when starting a session.
           </div>
         )}
 
@@ -257,22 +257,6 @@ export function WorktreePanel({ sessions, onOpenSession, onClose }: Props) {
                       {wt.branch ?? 'detached'}
                     </span>
 
-                    {/* Main badge */}
-                    {wt.isMain && (
-                      <span style={{
-                        fontSize: '9px',
-                        color: '#60a5fa',
-                        background: 'rgba(96,165,250,0.12)',
-                        border: '1px solid rgba(96,165,250,0.3)',
-                        borderRadius: '3px',
-                        padding: '1px 5px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        flexShrink: 0,
-                      }}>
-                        main
-                      </span>
-                    )}
                   </div>
 
                   {/* Path */}
@@ -280,7 +264,7 @@ export function WorktreePanel({ sessions, onOpenSession, onClose }: Props) {
                     fontSize: '10px',
                     color: '#555',
                     marginLeft: '12px',
-                    marginBottom: confirmingThis || errorMsg || !wt.isMain ? '6px' : 0,
+                    marginBottom: confirmingThis || errorMsg ? '6px' : 0,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
@@ -295,9 +279,7 @@ export function WorktreePanel({ sessions, onOpenSession, onClose }: Props) {
                     </div>
                   )}
 
-                  {/* Action buttons for non-main worktrees */}
-                  {!wt.isMain && (
-                    <div style={{ display: 'flex', gap: '6px', marginLeft: '12px', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '6px', marginLeft: '12px', alignItems: 'center' }}>
                       {confirmingThis ? (
                         <>
                           <span style={{ fontSize: '11px', color: '#aaa' }}>
@@ -338,7 +320,6 @@ export function WorktreePanel({ sessions, onOpenSession, onClose }: Props) {
                         </>
                       )}
                     </div>
-                  )}
                 </div>
               )
             })}

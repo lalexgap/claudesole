@@ -3,7 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { createSession, createShellSession, writeToSession, resizeSession, killSession } from './ptyManager'
 import { listClaudeSessions, latestSessionIdForCwd, getUsageForCwd } from './sessionManager'
-import { getGitInfo, listWorktrees, removeWorktree } from './gitInfo'
+import { getGitInfo, listWorktrees, removeWorktree, listBranches, createWorktreeOnBranch } from './gitInfo'
 
 function validateDir(p: unknown): string {
   if (typeof p !== 'string' || !path.isAbsolute(p)) throw new Error('Invalid path')
@@ -33,6 +33,17 @@ function setupIpcHandlers() {
 
   ipcMain.handle('git:listWorktrees', (_event, cwd: string) => {
     try { return listWorktrees(validateDir(cwd)) } catch { return [] }
+  })
+
+  ipcMain.handle('git:listBranches', (_event, cwd: string) => {
+    try { return listBranches(validateDir(cwd)) } catch { return [] }
+  })
+
+  ipcMain.handle('git:createWorktreeOnBranch', (_event, { cwd, branch }: { cwd: string; branch: string }) => {
+    if (typeof branch !== 'string' || !branch || /[^a-zA-Z0-9/._-]/.test(branch)) throw new Error('Invalid branch name')
+    try { return createWorktreeOnBranch(validateDir(cwd), branch) } catch (err) {
+      throw new Error(err instanceof Error ? err.message : 'Failed to create worktree')
+    }
   })
 
   ipcMain.handle('git:removeWorktree', (_event, { repoPath, worktreePath, force }: { repoPath: string; worktreePath: string; force: boolean }) => {

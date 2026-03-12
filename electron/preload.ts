@@ -58,4 +58,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   removeWorktree: (repoPath: string, worktreePath: string, force: boolean): Promise<void> =>
     ipcRenderer.invoke('git:removeWorktree', { repoPath, worktreePath, force }),
+
+  listBranches: (cwd: string): Promise<string[]> =>
+    ipcRenderer.invoke('git:listBranches', cwd),
+
+  createWorktreeOnBranch: (cwd: string, branch: string): Promise<string> =>
+    ipcRenderer.invoke('git:createWorktreeOnBranch', { cwd, branch }),
 })

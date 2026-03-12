@@ -1,4 +1,5 @@
 import { execFileSync } from 'child_process'
+import path from 'path'
 
 export interface GitInfo {
   branch: string | null
@@ -70,6 +71,42 @@ export function removeWorktree(repoPath: string, worktreePath: string, force: bo
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'pipe'],
   })
+}
+
+export function listBranches(cwd: string): string[] {
+  try {
+    const output = execFileSync('git', ['-C', cwd, 'branch', '--format=%(refname:short)'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+    return output ? output.split('\n').map(b => b.trim()).filter(Boolean) : []
+  } catch {
+    return []
+  }
+}
+
+function getRepoRoot(cwd: string): string | null {
+  try {
+    return execFileSync('git', ['-C', cwd, 'rev-parse', '--show-toplevel'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim() || null
+  } catch {
+    return null
+  }
+}
+
+export function createWorktreeOnBranch(cwd: string, branch: string): string {
+  const repoRoot = getRepoRoot(cwd)
+  if (!repoRoot) throw new Error('Not a git repository')
+  const repoName = path.basename(repoRoot)
+  const safeBranch = branch.replace(/[^a-zA-Z0-9._-]/g, '-')
+  const worktreePath = path.join(path.dirname(repoRoot), `${repoName}-${safeBranch}`)
+  execFileSync('git', ['-C', repoRoot, 'worktree', 'add', worktreePath, branch], {
+    encoding: 'utf-8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  return worktreePath
 }
 
 export function getGitInfo(cwd: string): GitInfo | null {
