@@ -14,7 +14,7 @@ function getEnv(): Record<string, string> {
   if (resolvedEnv) return resolvedEnv
   const shell = process.env.SHELL || '/bin/zsh'
   try {
-    const output = execFileSync(shell, ['-l', '-c', 'env -0'], {
+    const output = execFileSync(shell, ['-i', '-l', '-c', 'env -0'], {
       encoding: 'utf8',
       timeout: 5000,
     })
