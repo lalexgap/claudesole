@@ -33,6 +33,9 @@ export function WorktreePanel({ sessions, onOpenSession, onClose }: Props) {
 
   const openCwds = new Set(sessions.map(s => s.cwd))
 
+  // Only re-fetch when the set of cwds changes, not on every status update
+  const cwdKey = [...new Set(sessions.map(s => s.cwd))].sort().join('|')
+
   useEffect(() => {
     async function load() {
       setLoading(true)
@@ -64,7 +67,7 @@ export function WorktreePanel({ sessions, onOpenSession, onClose }: Props) {
     }
 
     load()
-  }, [sessions])
+  }, [cwdKey])
 
   const handleRemoveClick = (wt: Worktree) => {
     setConfirm({ worktreePath: wt.path, stage: 'confirm' })

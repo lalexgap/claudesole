@@ -38,16 +38,17 @@ export default function App() {
   }, [sessions])
 
   const handleResume = (session: ClaudeSession, { skipPermissions, worktree }: SessionOpts) => {
-    // Store the Claude session ID so fork can use it later
     const sessionId = addSession(session.cwd, session.firstPrompt, undefined, session.sessionId)
     window.electronAPI.createSession(sessionId, session.cwd, session.sessionId, skipPermissions, worktree)
     closeModal()
+    if (pendingSplit) handleSplitWithNew(sessionId)
   }
 
   const handleNewInFolder = (cwd: string, { skipPermissions, worktree }: SessionOpts) => {
     const sessionId = addSession(cwd)
     window.electronAPI.createSession(sessionId, cwd, undefined, skipPermissions, worktree)
     closeModal()
+    if (pendingSplit) handleSplitWithNew(sessionId)
   }
 
   const handleBrowse = async ({ skipPermissions, worktree }: SessionOpts) => {
@@ -56,6 +57,7 @@ export default function App() {
     const sessionId = addSession(cwd)
     window.electronAPI.createSession(sessionId, cwd, undefined, skipPermissions, worktree)
     closeModal()
+    if (pendingSplit) handleSplitWithNew(sessionId)
   }
 
   const handleCloseTab = useCallback((id: string) => {
@@ -82,9 +84,17 @@ export default function App() {
     })
   }, [sessions, focusedPaneId, removeSession])
 
+  const [pendingSplit, setPendingSplit] = useState<{ sourceId: string; dir: 'h' | 'v' } | null>(null)
+
   const handleSplit = (id: string, dir: 'h' | 'v') => {
     const focusedId = paneRoot ? focusedPaneId : activeId
-    if (!focusedId || focusedId === id) return
+    if (!focusedId) return
+    if (focusedId === id) {
+      // Splitting the active tab itself — open modal to pick what goes in the new pane
+      setPendingSplit({ sourceId: id, dir })
+      setShowModal(true)
+      return
+    }
     if (paneRoot === null) {
       setPaneRoot({ type: 'split', dir, ratio: 0.5, first: { type: 'leaf', sessionId: focusedId }, second: { type: 'leaf', sessionId: id } })
     } else {
@@ -92,6 +102,19 @@ export default function App() {
     }
     setFocusedPaneId(id)
     setActive(id)
+  }
+
+  const handleSplitWithNew = (newId: string) => {
+    if (!pendingSplit) return
+    const { sourceId, dir } = pendingSplit
+    setPendingSplit(null)
+    if (paneRoot === null) {
+      setPaneRoot({ type: 'split', dir, ratio: 0.5, first: { type: 'leaf', sessionId: sourceId }, second: { type: 'leaf', sessionId: newId } })
+    } else {
+      setPaneRoot(prev => prev ? splitLeaf(prev, sourceId, dir, newId) : { type: 'leaf', sessionId: newId })
+    }
+    setFocusedPaneId(newId)
+    setActive(newId)
   }
 
   const handlePaneFocus = (id: string) => {

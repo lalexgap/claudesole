@@ -125,7 +125,7 @@ export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onClose }: 
         }}
       >
         {/* Left: list */}
-        <div style={{ width: '360px', display: 'flex', flexDirection: 'column', borderRight: '1px solid #272727' }}>
+        <div style={{ width: '360px', display: 'flex', flexDirection: 'column' }}>
 
           {/* Header: search + checkbox */}
           <div style={{ flexShrink: 0, borderBottom: '1px solid #272727' }}>
@@ -249,9 +249,12 @@ export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onClose }: 
           </div>
         </div>
 
-        {/* Right: detail panel */}
-        {activeSession && (
-          <div style={{ width: '280px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto' }}>
+        {/* Right: detail panel — always rendered to prevent width jumps */}
+        <div style={{ width: '280px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto', borderLeft: '1px solid #272727' }}>
+          {!activeSession && (
+            <div style={{ color: '#444', fontSize: '12px', marginTop: '8px' }}>Select a session to see details</div>
+          )}
+          {activeSession && (<>
             <div>
               <div style={{ color: '#e5e5e5', fontWeight: 600, fontSize: '13px', marginBottom: '2px' }}>
                 {activeSession.slug || activeSession.projectName}
@@ -311,8 +314,8 @@ export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onClose }: 
                 {activeSession.sessionId}
               </div>
             </div>
-          </div>
-        )}
+          </>)}
+        </div>
       </div>
     </div>
   )
