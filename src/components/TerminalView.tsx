@@ -27,6 +27,11 @@ export function TerminalView({ sessionId, isActive, isShell, onCmdK }: TerminalV
 
   useTerminal(sessionId, containerRef, openSearch, onCmdK ?? (() => {}), handleRef, isShell)
 
+  // Scroll to bottom whenever this terminal becomes the active one
+  useEffect(() => {
+    if (isActive) handleRef.current?.scrollToBottom()
+  }, [isActive])
+
   // Only handle search keys when this tab is active
   useEffect(() => {
     if (!isActive) return

@@ -8,6 +8,7 @@ import { useSessionsStore } from '../store/sessions'
 export interface TerminalHandle {
   findNext: (query: string) => void
   findPrevious: (query: string) => void
+  scrollToBottom: () => void
 }
 
 export function useTerminal(
@@ -56,6 +57,7 @@ export function useTerminal(
     handleRef.current = {
       findNext: (q) => searchAddon.findNext(q, { decorations: searchDecorations }),
       findPrevious: (q) => searchAddon.findPrevious(q, { decorations: searchDecorations }),
+      scrollToBottom: () => term.scrollToBottom(),
     }
 
     term.attachCustomKeyEventHandler(e => {
