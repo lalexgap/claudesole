@@ -29,8 +29,16 @@ export function useTerminal(
   const userActedRef = useRef(false) // true after user types; gates notification reset
   const onCmdFRef = useRef(onCmdF)
   const onCmdKRef = useRef(onCmdK)
+  const markRunningRef = useRef(markRunning)
+  const markWaitingRef = useRef(markWaiting)
+  const removeSessionRef = useRef(removeSession)
+  const isShellRef = useRef(isShell)
   useEffect(() => { onCmdFRef.current = onCmdF })
   useEffect(() => { onCmdKRef.current = onCmdK })
+  useEffect(() => { markRunningRef.current = markRunning })
+  useEffect(() => { markWaitingRef.current = markWaiting })
+  useEffect(() => { removeSessionRef.current = removeSession })
+  useEffect(() => { isShellRef.current = isShell })
 
   useEffect(() => {
     const container = containerRef.current
@@ -99,7 +107,7 @@ export function useTerminal(
 
       const isClaudeData = Date.now() > suppressRunningUntil.current
       if (isClaudeData) {
-        markRunning(id)
+        markRunningRef.current(id)
         // Only reset notification gate if the user has actually typed since the last notification.
         // This prevents spurious PTY output (e.g. resize redraws) from re-arming the notification.
         if (userActedRef.current) {
@@ -111,9 +119,9 @@ export function useTerminal(
 
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
       idleTimerRef.current = setTimeout(() => {
-        markWaiting(id)
+        markWaitingRef.current(id)
         const shouldNotify =
-          !isShell &&
+          !isShellRef.current &&
           claudeRespondedRef.current &&
           !notifiedIdleRef.current &&
           !document.hasFocus() &&
@@ -129,7 +137,7 @@ export function useTerminal(
 
     const removeExitListener = window.electronAPI.onExit((id) => {
       if (id !== sessionId) return
-      removeSession(id)
+      removeSessionRef.current(id)
     })
 
     const resizeObserver = new ResizeObserver(() => {

@@ -30,12 +30,15 @@ function extractText(content: unknown): string {
 function parseFile(filePath: string, fileSize: number): { cwd?: string; slug?: string; firstPrompt?: string; latestPrompt?: string; tokensUsed?: number; model?: string } {
   try {
     const HEAD = 16384
+    let headBuf: Buffer
+    let headN: number
     const fd = fs.openSync(filePath, 'r')
-
-    // Read head for cwd / slug / firstPrompt
-    const headBuf = Buffer.alloc(Math.min(HEAD, fileSize))
-    const headN = fs.readSync(fd, headBuf, 0, headBuf.length, 0)
-    fs.closeSync(fd)
+    try {
+      headBuf = Buffer.alloc(Math.min(HEAD, fileSize))
+      headN = fs.readSync(fd, headBuf, 0, headBuf.length, 0)
+    } finally {
+      fs.closeSync(fd)
+    }
 
     let cwd: string | undefined
     let slug: string | undefined
@@ -130,7 +133,17 @@ function findTailData(filePath: string, fileSize: number): TailData {
   return result
 }
 
+let cachedSessions: ClaudeSession[] | null = null
+let cacheExpiresAt = 0
+
 export function listClaudeSessions(): ClaudeSession[] {
+  if (cachedSessions && Date.now() < cacheExpiresAt) return cachedSessions
+  cachedSessions = _listClaudeSessions()
+  cacheExpiresAt = Date.now() + 2000
+  return cachedSessions
+}
+
+function _listClaudeSessions(): ClaudeSession[] {
   const projectsDir = path.join(os.homedir(), '.claude', 'projects')
   if (!fs.existsSync(projectsDir)) return []
 

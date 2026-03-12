@@ -1,8 +1,20 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import path from 'path'
+import fs from 'fs'
 import { createSession, createShellSession, writeToSession, resizeSession, killSession } from './ptyManager'
 import { listClaudeSessions, latestSessionIdForCwd, getUsageForCwd } from './sessionManager'
 import { getGitInfo, listWorktrees, removeWorktree } from './gitInfo'
+
+function validateDir(p: unknown): string {
+  if (typeof p !== 'string' || !path.isAbsolute(p)) throw new Error('Invalid path')
+  const resolved = path.resolve(p)
+  try {
+    if (!fs.statSync(resolved).isDirectory()) throw new Error('Not a directory')
+  } catch {
+    throw new Error('Path does not exist or is not a directory')
+  }
+  return resolved
+}
 
 // Mutable reference updated each time a window is created, used by IPC handlers
 // that need to communicate back to the renderer.
@@ -15,16 +27,26 @@ function setupIpcHandlers() {
 
   ipcMain.handle('sessions:getUsage', (_event, cwd: string) => getUsageForCwd(cwd))
 
-  ipcMain.handle('git:info', (_event, cwd: string) => getGitInfo(cwd))
+  ipcMain.handle('git:info', (_event, cwd: string) => {
+    try { return getGitInfo(validateDir(cwd)) } catch { return null }
+  })
 
-  ipcMain.handle('git:listWorktrees', (_event, cwd: string) => listWorktrees(cwd))
+  ipcMain.handle('git:listWorktrees', (_event, cwd: string) => {
+    try { return listWorktrees(validateDir(cwd)) } catch { return [] }
+  })
 
   ipcMain.handle('git:removeWorktree', (_event, { repoPath, worktreePath, force }: { repoPath: string; worktreePath: string; force: boolean }) => {
-    removeWorktree(repoPath, worktreePath, force)
+    try {
+      removeWorktree(validateDir(repoPath), validateDir(worktreePath), force)
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : 'Failed to remove worktree')
+    }
   })
 
   ipcMain.on('pty:create', (_event, { sessionId, cwd, resumeSessionId, skipPermissions, worktree, forkSession }: { sessionId: string; cwd: string; resumeSessionId?: string; skipPermissions?: boolean; worktree?: boolean; forkSession?: boolean }) => {
-    createSession(sessionId, cwd, resumeSessionId ?? null, skipPermissions ?? true, worktree ?? false, forkSession ?? false, (data) => {
+    let validCwd: string
+    try { validCwd = validateDir(cwd) } catch { win?.webContents.send('pty:exit', { sessionId }); return }
+    createSession(sessionId, validCwd, resumeSessionId ?? null, skipPermissions ?? true, worktree ?? false, forkSession ?? false, (data) => {
       win?.webContents.send('pty:data', { sessionId, data })
     }, () => {
       win?.webContents.send('pty:exit', { sessionId })
@@ -32,7 +54,9 @@ function setupIpcHandlers() {
   })
 
   ipcMain.on('pty:createShell', (_event, { sessionId, cwd }: { sessionId: string; cwd: string }) => {
-    createShellSession(sessionId, cwd, (data) => {
+    let validCwd: string
+    try { validCwd = validateDir(cwd) } catch { win?.webContents.send('pty:exit', { sessionId }); return }
+    createShellSession(sessionId, validCwd, (data) => {
       win?.webContents.send('pty:data', { sessionId, data })
     }, () => {
       win?.webContents.send('pty:exit', { sessionId })
