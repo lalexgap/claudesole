@@ -192,7 +192,7 @@ export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onClose }: 
                     <div style={{ color: '#777', fontSize: '11px', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {session.projectName}{session.slug ? ` · ${session.cwd}` : ''}
                     </div>
-                    {session.firstPrompt && (
+                    {(session.latestPrompt || session.firstPrompt) && (
                       <div style={{
                         color: '#888',
                         fontSize: '11px',
@@ -203,7 +203,7 @@ export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onClose }: 
                         WebkitBoxOrient: 'vertical',
                         overflow: 'hidden',
                       } as React.CSSProperties}>
-                        {session.firstPrompt}
+                        {session.latestPrompt || session.firstPrompt}
                       </div>
                     )}
                   </div>
@@ -271,15 +271,32 @@ export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onClose }: 
               <div style={{ color: '#999', fontSize: '11px' }}>{relativeTime(activeSession.lastActivity)}</div>
             </div>
 
-            {activeSession.firstPrompt && (
+            {activeSession.latestPrompt && activeSession.latestPrompt !== activeSession.firstPrompt && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <DetailLabel>First prompt</DetailLabel>
+                <DetailLabel>Last prompt</DetailLabel>
                 <div style={{
                   color: '#aaa',
                   fontSize: '11px',
                   lineHeight: '1.6',
                   display: '-webkit-box',
-                  WebkitLineClamp: 8,
+                  WebkitLineClamp: 5,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                } as React.CSSProperties}>
+                  {activeSession.latestPrompt}
+                </div>
+              </div>
+            )}
+
+            {activeSession.firstPrompt && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <DetailLabel>First prompt</DetailLabel>
+                <div style={{
+                  color: '#666',
+                  fontSize: '11px',
+                  lineHeight: '1.6',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 5,
                   WebkitBoxOrient: 'vertical',
                   overflow: 'hidden',
                 } as React.CSSProperties}>
