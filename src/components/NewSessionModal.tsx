@@ -15,6 +15,8 @@ type Item =
   | { type: 'session'; session: ClaudeSession }
   | { type: 'folder'; cwd: string }
   | { type: 'browse' }
+  | { type: 'shellFolder'; cwd: string }
+  | { type: 'shellBrowse' }
 
 export interface SessionOpts { skipPermissions: boolean; worktree: boolean }
 
@@ -22,10 +24,12 @@ interface Props {
   onResume: (session: ClaudeSession, opts: SessionOpts) => void
   onNewInFolder: (cwd: string, opts: SessionOpts) => void
   onBrowse: (opts: SessionOpts) => void
+  onNewShell: (cwd: string) => void
+  onShellBrowse: () => void
   onClose: () => void
 }
 
-export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onClose }: Props) {
+export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onNewShell, onShellBrowse, onClose }: Props) {
   const [sessions, setSessions] = useState<ClaudeSession[]>([])
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
@@ -58,6 +62,8 @@ export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onClose }: 
     ...filteredSessions.map(s => ({ type: 'session' as const, session: s })),
     ...recentFolders.map(cwd => ({ type: 'folder' as const, cwd })),
     { type: 'browse' },
+    ...recentFolders.map(cwd => ({ type: 'shellFolder' as const, cwd })),
+    { type: 'shellBrowse' },
   ], [filteredSessions, recentFolders])
 
   useEffect(() => { setSelected(0) }, [query])
@@ -71,8 +77,10 @@ export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onClose }: 
   const activate = useCallback((item: Item) => {
     if (item.type === 'session') onResume(item.session, opts)
     else if (item.type === 'folder') onNewInFolder(item.cwd, opts)
-    else onBrowse(opts)
-  }, [onResume, onNewInFolder, onBrowse, skipPermissions, worktree])
+    else if (item.type === 'browse') onBrowse(opts)
+    else if (item.type === 'shellFolder') onNewShell(item.cwd)
+    else onShellBrowse()
+  }, [onResume, onNewInFolder, onBrowse, onNewShell, onShellBrowse, skipPermissions, worktree])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -88,6 +96,8 @@ export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onClose }: 
   const sessionOffset = 0
   const folderOffset = filteredSessions.length
   const browseOffset = folderOffset + recentFolders.length
+  const shellFolderOffset = browseOffset + 1
+  const shellBrowseOffset = shellFolderOffset + recentFolders.length
 
   const activeSession: ClaudeSession | null =
     hoveredSession ??
@@ -239,12 +249,40 @@ export function NewSessionModal({ onResume, onNewInFolder, onBrowse, onClose }: 
             ))}
             <div
               ref={el => { if (el) itemRefs.current.set(browseOffset, el); else itemRefs.current.delete(browseOffset) }}
-              style={{ ...rowStyle(browseOffset), display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px', margin: '1px 4px 4px' }}
+              style={{ ...rowStyle(browseOffset), display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px', margin: '1px 4px 2px' }}
               onClick={() => onBrowse(opts)}
               onMouseEnter={() => { setSelected(browseOffset); setHoveredSession(null) }}
             >
               <span style={{ color: '#555', fontSize: '12px' }}>⊕</span>
               <span style={{ color: '#888', fontSize: '12px' }}>Browse for folder…</span>
+            </div>
+
+            <SectionLabel style={{ paddingTop: '4px', paddingBottom: '2px' }}>New shell</SectionLabel>
+            {recentFolders.map((cwd, i) => (
+              <div
+                key={cwd}
+                ref={el => { if (el) itemRefs.current.set(shellFolderOffset + i, el); else itemRefs.current.delete(shellFolderOffset + i) }}
+                style={{ ...rowStyle(shellFolderOffset + i), display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px' }}
+                onClick={() => onNewShell(cwd)}
+                onMouseEnter={() => { setSelected(shellFolderOffset + i); setHoveredSession(null) }}
+              >
+                <span style={{ color: '#60a5fa', fontSize: '11px', flexShrink: 0, fontFamily: 'monospace' }}>$</span>
+                <span style={{ color: '#d4d4d4', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                  {cwd.split('/').pop()}
+                </span>
+                <span style={{ color: '#555', fontSize: '10px', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>
+                  {cwd.split('/').slice(0, -1).join('/').replace('/Users/' + cwd.split('/')[2], '~')}
+                </span>
+              </div>
+            ))}
+            <div
+              ref={el => { if (el) itemRefs.current.set(shellBrowseOffset, el); else itemRefs.current.delete(shellBrowseOffset) }}
+              style={{ ...rowStyle(shellBrowseOffset), display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px', margin: '1px 4px 4px' }}
+              onClick={onShellBrowse}
+              onMouseEnter={() => { setSelected(shellBrowseOffset); setHoveredSession(null) }}
+            >
+              <span style={{ color: '#60a5fa', fontSize: '11px', fontFamily: 'monospace' }}>$</span>
+              <span style={{ color: '#888', fontSize: '12px' }}>Shell in folder…</span>
             </div>
           </div>
         </div>

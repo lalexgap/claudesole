@@ -122,6 +122,19 @@ export default function App() {
     setActive(id)
   }
 
+  const handleNewShellInCwd = (cwd: string) => {
+    const sessionId = addSession(cwd, '', undefined, undefined, 'shell')
+    window.electronAPI.createShellSession(sessionId, cwd)
+    closeModal()
+    if (pendingSplit) handleSplitWithNew(sessionId)
+  }
+
+  const handleShellBrowse = async () => {
+    const cwd = await window.electronAPI.openDirectory()
+    if (!cwd) return
+    handleNewShellInCwd(cwd)
+  }
+
   const handleNewShellTab = async () => {
     const active = sessions.find(s => s.id === activeId)
     const cwd = active?.cwd ?? await window.electronAPI.openDirectory()
@@ -294,6 +307,8 @@ export default function App() {
           onResume={handleResume}
           onNewInFolder={handleNewInFolder}
           onBrowse={handleBrowse}
+          onNewShell={handleNewShellInCwd}
+          onShellBrowse={handleShellBrowse}
           onClose={closeModal}
         />
       )}
