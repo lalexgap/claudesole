@@ -18,12 +18,15 @@ interface TabBarProps {
   onToggleHistory: () => void
   sidebarOpen: boolean
   onToggleSidebar: () => void
+  worktreesOpen: boolean
+  onToggleWorktrees: () => void
 }
 
 export function TabBar({
   sessions, activeId, onSelectTab, onCloseTab, onNewTab, onNewShellTab,
   onRenameTab, onPinTab, onForkTab, onSplitHTab, onSplitVTab,
   historyOpen, onToggleHistory, sidebarOpen, onToggleSidebar,
+  worktreesOpen, onToggleWorktrees,
 }: TabBarProps) {
   const reorderSession = useSessionsStore((s) => s.reorderSession)
   const dragId = useRef<string | null>(null)
@@ -158,6 +161,25 @@ export function TabBar({
         } as React.CSSProperties}
       >
         ◷
+      </button>
+
+      <button
+        onClick={onToggleWorktrees}
+        title="Git worktrees (⌘⇧G)"
+        style={{
+          WebkitAppRegion: 'no-drag',
+          background: worktreesOpen ? 'rgba(255,255,255,0.08)' : 'none',
+          border: 'none',
+          color: worktreesOpen ? '#bbb' : '#555',
+          fontSize: '13px',
+          cursor: 'pointer',
+          padding: '3px 6px',
+          borderRadius: '4px',
+          flexShrink: 0,
+          lineHeight: 1,
+        } as React.CSSProperties}
+      >
+        ⎇
       </button>
 
       <button

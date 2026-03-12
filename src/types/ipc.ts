@@ -1,3 +1,10 @@
+export interface Worktree {
+  path: string
+  branch: string | null
+  isMain: boolean
+  repoRoot: string
+}
+
 export interface ClaudeSession {
   sessionId: string
   cwd: string
@@ -25,6 +32,8 @@ export interface ElectronAPI {
   setBadgeCount: (count: number) => void
   getSessionUsage: (cwd: string) => Promise<{ tokensUsed?: number; model?: string } | null>
   getGitInfo: (cwd: string) => Promise<{ branch: string | null; isWorktree: boolean } | null>
+  listWorktrees: (cwd: string) => Promise<Worktree[]>
+  removeWorktree: (repoPath: string, worktreePath: string, force: boolean) => Promise<void>
 }
 
 declare global {

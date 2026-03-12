@@ -7,6 +7,7 @@ import { SessionSidebar } from './components/SessionSidebar'
 import { SessionHistoryPanel } from './components/SessionHistoryPanel'
 import { SplitView, PaneNode, splitLeaf, removeFromTree, getLeafIds } from './components/SplitView'
 import { QuickSwitcher } from './components/QuickSwitcher'
+import { WorktreePanel } from './components/WorktreePanel'
 import { ClaudeSession } from './types/ipc'
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
   const [showSidebar, setShowSidebar] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [showSwitcher, setShowSwitcher] = useState(false)
+  const [showWorktrees, setShowWorktrees] = useState(false)
   const [paneRoot, setPaneRoot] = useState<PaneNode | null>(null)
   const [focusedPaneId, setFocusedPaneId] = useState<string | null>(null)
 
@@ -22,6 +24,7 @@ export default function App() {
   const closeModal = () => setShowModal(false)
   const toggleSidebar = () => setShowSidebar(v => !v)
   const toggleHistory = () => setShowHistory(v => !v)
+  const toggleWorktrees = () => setShowWorktrees(v => !v)
 
   // Auto-open modal on launch
   useEffect(() => {
@@ -145,6 +148,7 @@ export default function App() {
       if (e.key === 'b') { e.preventDefault(); toggleSidebar(); return }
       if (e.key === 'h') { e.preventDefault(); toggleHistory(); return }
       if (e.key === 'k') { e.preventDefault(); setShowSwitcher(v => !v); return }
+      if (e.key === 'G' && e.shiftKey) { e.preventDefault(); toggleWorktrees(); return }
 
       if (e.key === 'Escape' && showSwitcher) { e.preventDefault(); setShowSwitcher(false); return }
 
@@ -164,7 +168,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [activeId, sessions, showModal, showHistory, showSwitcher, handleCloseTab])
+  }, [activeId, sessions, showModal, showHistory, showSwitcher, showWorktrees, handleCloseTab])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
@@ -184,6 +188,8 @@ export default function App() {
         onToggleHistory={toggleHistory}
         sidebarOpen={showSidebar}
         onToggleSidebar={toggleSidebar}
+        worktreesOpen={showWorktrees}
+        onToggleWorktrees={toggleWorktrees}
       />
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -243,6 +249,18 @@ export default function App() {
               onResume={handleHistoryResume}
               onFork={handleHistoryFork}
               onClose={() => setShowHistory(false)}
+            />
+          )}
+
+          {showWorktrees && (
+            <WorktreePanel
+              sessions={sessions}
+              onOpenSession={(cwd) => {
+                const sessionId = addSession(cwd)
+                window.electronAPI.createSession(sessionId, cwd, undefined, true, false)
+                setShowWorktrees(false)
+              }}
+              onClose={() => setShowWorktrees(false)}
             />
           )}
         </div>

@@ -52,4 +52,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   getGitInfo: (cwd: string): Promise<{ branch: string | null; isWorktree: boolean } | null> =>
     ipcRenderer.invoke('git:info', cwd),
+
+  listWorktrees: (cwd: string): Promise<import('./gitInfo').Worktree[]> =>
+    ipcRenderer.invoke('git:listWorktrees', cwd),
+
+  removeWorktree: (repoPath: string, worktreePath: string, force: boolean): Promise<void> =>
+    ipcRenderer.invoke('git:removeWorktree', { repoPath, worktreePath, force }),
 })

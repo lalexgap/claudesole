@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import path from 'path'
 import { createSession, createShellSession, writeToSession, resizeSession, killSession } from './ptyManager'
 import { listClaudeSessions, latestSessionIdForCwd, getUsageForCwd } from './sessionManager'
-import { getGitInfo } from './gitInfo'
+import { getGitInfo, listWorktrees, removeWorktree } from './gitInfo'
 
 // Mutable reference updated each time a window is created, used by IPC handlers
 // that need to communicate back to the renderer.
@@ -16,6 +16,12 @@ function setupIpcHandlers() {
   ipcMain.handle('sessions:getUsage', (_event, cwd: string) => getUsageForCwd(cwd))
 
   ipcMain.handle('git:info', (_event, cwd: string) => getGitInfo(cwd))
+
+  ipcMain.handle('git:listWorktrees', (_event, cwd: string) => listWorktrees(cwd))
+
+  ipcMain.handle('git:removeWorktree', (_event, { repoPath, worktreePath, force }: { repoPath: string; worktreePath: string; force: boolean }) => {
+    removeWorktree(repoPath, worktreePath, force)
+  })
 
   ipcMain.on('pty:create', (_event, { sessionId, cwd, resumeSessionId, skipPermissions, worktree, forkSession }: { sessionId: string; cwd: string; resumeSessionId?: string; skipPermissions?: boolean; worktree?: boolean; forkSession?: boolean }) => {
     createSession(sessionId, cwd, resumeSessionId ?? null, skipPermissions ?? true, worktree ?? false, forkSession ?? false, (data) => {
