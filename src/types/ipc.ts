@@ -36,6 +36,7 @@ export interface ElectronAPI {
   removeWorktree: (repoPath: string, worktreePath: string, force: boolean) => Promise<void>
   listBranches: (cwd: string) => Promise<string[]>
   createWorktree: (repoPath: string, branch: string) => Promise<string>
+  openExternal: (url: string) => void
 }
 
 declare global {

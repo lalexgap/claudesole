@@ -65,4 +65,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createWorktree: (repoPath: string, branch: string): Promise<string> =>
     ipcRenderer.invoke('git:createWorktree', { repoPath, branch }),
 
+  openExternal: (url: string) =>
+    ipcRenderer.send('shell:openExternal', url),
+
 })

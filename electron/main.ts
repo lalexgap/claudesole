@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, session } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, session, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { createSession, createShellSession, writeToSession, resizeSession, killSession } from './ptyManager'
@@ -99,6 +99,12 @@ function setupIpcHandlers() {
   ipcMain.on('app:setBadgeCount', (_event, count: number) => {
     app.setBadgeCount(count)
   })
+
+  ipcMain.on('shell:openExternal', (_event, url: string) => {
+    if (typeof url === 'string' && /^https?:\/\//.test(url)) {
+      shell.openExternal(url)
+    }
+  })
 }
 
 function createWindow() {
@@ -119,6 +125,18 @@ function createWindow() {
   } else {
     win.loadFile(path.join(__dirname, '../renderer/index.html'))
   }
+
+  // Prevent external URLs from opening inside the app
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  win.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('http://localhost') && !url.startsWith('file://')) {
+      event.preventDefault()
+      if (/^https?:\/\//.test(url)) shell.openExternal(url)
+    }
+  })
 
   // Keyboard shortcut Cmd+T for new session (sent to renderer)
   win.webContents.on('before-input-event', (_event, input) => {

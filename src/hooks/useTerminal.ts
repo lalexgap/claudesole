@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
+import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import { useSessionsStore } from '../store/sessions'
 
@@ -44,6 +45,8 @@ export function useTerminal(
     const container = containerRef.current
     if (!container) return
 
+    let hoveredUrl: string | null = null
+
     const term = new Terminal({
       theme: {
         background: '#1a1a1a',
@@ -54,13 +57,34 @@ export function useTerminal(
       fontSize: 13,
       cursorBlink: true,
       scrollback: 10000,
+      // Handle OSC 8 hyperlinks (emitted by Claude CLI etc.) via cmd+click
+      linkHandler: {
+        activate: () => { /* handled by mousedown listener below */ },
+        hover: (_event, uri) => { hoveredUrl = uri },
+        leave: () => { hoveredUrl = null },
+      },
     })
-
     const fitAddon = new FitAddon()
     const searchAddon = new SearchAddon()
+    const webLinksAddon = new WebLinksAddon(
+      () => { /* handled by mousedown listener below */ },
+      {
+        hover: (_e, uri) => { hoveredUrl = uri },
+        leave: () => { hoveredUrl = null },
+      }
+    )
     term.loadAddon(fitAddon)
     term.loadAddon(searchAddon)
+    term.loadAddon(webLinksAddon)
     term.open(container)
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.metaKey && hoveredUrl) {
+        window.electronAPI.openExternal(hoveredUrl)
+        e.preventDefault()
+      }
+    }
+    container.addEventListener('mousedown', onMouseDown)
     fitAddon.fit()
 
     handleRef.current = {
@@ -149,6 +173,7 @@ export function useTerminal(
       removeDataListener()
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
       resizeObserver.disconnect()
+      container.removeEventListener('mousedown', onMouseDown)
       term.dispose()
     }
   }, [sessionId])
