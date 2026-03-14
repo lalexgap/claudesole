@@ -126,6 +126,23 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
     onNewInFolder(pendingCwd, { skipPermissions, worktree, branch: worktree && branch ? branch : undefined })
   }, [pendingCwd, skipPermissions, worktree, branch, onNewInFolder])
 
+  const cycleSection = useCallback((reverse: boolean) => {
+    const fOffset = filteredSessions.length
+    const sfOffset = fOffset + recentFolders.length + 1
+    const sections = [
+      ...(filteredSessions.length > 0 ? [0] : []),
+      fOffset,
+      sfOffset,
+    ]
+    setSelected(cur => {
+      const currentIdx = sections.reduce((acc, start, i) => cur >= start ? i : acc, 0)
+      const nextIdx = reverse
+        ? (currentIdx - 1 + sections.length) % sections.length
+        : (currentIdx + 1) % sections.length
+      return sections[nextIdx]
+    })
+  }, [filteredSessions.length, recentFolders.length])
+
   const activate = useCallback((item: Item) => {
     if (item.type === 'session') onResume(item.session, { skipPermissions, worktree: false })
     else if (item.type === 'folder') goToOptions(item.cwd)
@@ -209,6 +226,7 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
                   ref={searchRef}
                   value={query}
                   onChange={e => setQuery(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Tab') { e.preventDefault(); cycleSection(e.shiftKey) } }}
                   placeholder="Search sessions…"
                   style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#e5e5e5', fontSize: '14px' }}
                 />
