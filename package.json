@@ -1,6 +1,6 @@
 {
   "name": "claudesole",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "description": "Multi-tab Electron terminal emulator for Claude CLI",
   "main": "out/main/main.js",
   "scripts": {
