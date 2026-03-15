@@ -8,15 +8,17 @@ import { SessionHistoryPanel } from './components/SessionHistoryPanel'
 import { PaneNode, splitLeaf, removeFromTree, getLeafIds, computeLayout, updateRatioAtPath, SplitDividers } from './components/SplitView'
 import { QuickSwitcher } from './components/QuickSwitcher'
 import { WorktreePanel } from './components/WorktreePanel'
+import { SettingsPanel } from './components/SettingsPanel'
 import { ClaudeSession } from './types/ipc'
 
 export default function App() {
-  const { sessions, activeId, addSession, removeSession, setActive, renameSession, togglePin } = useSessionsStore()
+  const { sessions, activeId, addSession, removeSession, setActive, renameSession, togglePin, setAiTitle } = useSessionsStore()
   const [showModal, setShowModal] = useState(false)
   const [showSidebar, setShowSidebar] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [showSwitcher, setShowSwitcher] = useState(false)
   const [showWorktrees, setShowWorktrees] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   // Map from primary session ID → pane tree for that tab's split layout
   const [paneRoots, setPaneRoots] = useState<Map<string, PaneNode>>(new Map())
@@ -63,6 +65,7 @@ export default function App() {
   const toggleSidebar = () => setShowSidebar(v => !v)
   const toggleHistory = () => setShowHistory(v => !v)
   const toggleWorktrees = () => setShowWorktrees(v => !v)
+  const toggleSettings = () => setShowSettings(v => !v)
 
   // Auto-open modal on launch
   useEffect(() => {
@@ -261,6 +264,7 @@ export default function App() {
       if (e.key === 'h') { e.preventDefault(); toggleHistory(); return }
       if (e.key === 'k') { e.preventDefault(); setShowSwitcher(v => !v); return }
       if (e.key === 'G' && e.shiftKey) { e.preventDefault(); toggleWorktrees(); return }
+      if (e.key === ',') { e.preventDefault(); toggleSettings(); return }
 
       if (e.key === 'Escape' && showSwitcher) { e.preventDefault(); setShowSwitcher(false); return }
 
@@ -280,7 +284,35 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [activeId, tabSessions, showModal, showHistory, showSwitcher, showWorktrees, handleCloseTab])
+  }, [activeId, tabSessions, showModal, showHistory, showSwitcher, showWorktrees, handleCloseTab, toggleSettings])
+
+  // Generate AI titles for sessions that have just gone "waiting" (Claude responded)
+  const titledSessionIds = useRef(new Set<string>())
+  useEffect(() => {
+    for (const session of sessions) {
+      if (session.type !== 'claude') continue
+      if (session.status !== 'waiting') continue
+      if (session.aiTitle) continue
+      if (titledSessionIds.current.has(session.id)) continue
+      titledSessionIds.current.add(session.id)
+      const tabId = session.id
+      const cwd = session.cwd
+      const inMemoryPrompt = session.firstPrompt;
+      (async () => {
+        let prompt = inMemoryPrompt
+        let cacheKey = tabId
+        if (!prompt) {
+          // New session: firstPrompt not captured in state — read from JSONL on disk
+          const latest = await window.electronAPI.getLatestSession(cwd)
+          if (!latest?.firstPrompt) return
+          prompt = latest.firstPrompt
+          cacheKey = latest.sessionId // use Claude UUID so history panel hits the same cache
+        }
+        const title = await window.electronAPI.generateSessionTitle(cacheKey, prompt)
+        if (title) setAiTitle(tabId, title)
+      })()
+    }
+  }, [sessions, setAiTitle])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
@@ -304,6 +336,8 @@ export default function App() {
         onToggleSidebar={toggleSidebar}
         worktreesOpen={showWorktrees}
         onToggleWorktrees={toggleWorktrees}
+        settingsOpen={showSettings}
+        onToggleSettings={toggleSettings}
       />
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -403,6 +437,10 @@ export default function App() {
               }}
               onClose={() => setShowWorktrees(false)}
             />
+          )}
+
+          {showSettings && (
+            <SettingsPanel onClose={() => setShowSettings(false)} />
           )}
         </div>
       </div>

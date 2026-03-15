@@ -61,7 +61,8 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
     s.projectName.toLowerCase().includes(q) ||
     s.slug.toLowerCase().includes(q) ||
     s.cwd.toLowerCase().includes(q) ||
-    s.firstPrompt.toLowerCase().includes(q)
+    s.firstPrompt.toLowerCase().includes(q) ||
+    (s.title || '').toLowerCase().includes(q)
   ), [sessions, q])
 
   const recentFolders = useMemo(() => [...new Set(sessions.map(s => s.cwd))]
@@ -259,7 +260,7 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
                     >
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
                         <span style={{ color: '#d4d4d4', fontWeight: 500, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {session.slug || session.projectName}
+                          {session.title || session.slug || session.projectName}
                         </span>
                         <span style={{ color: '#666', fontSize: '11px', marginLeft: 'auto', flexShrink: 0 }}>
                           {relativeTime(session.lastActivity)}
@@ -454,7 +455,7 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
               {activeSession && (<>
                 <div>
                   <div style={{ color: '#e5e5e5', fontWeight: 600, fontSize: '13px', marginBottom: '2px' }}>
-                    {activeSession.slug || activeSession.projectName}
+                    {activeSession.title || activeSession.slug || activeSession.projectName}
                   </div>
                   {activeSession.slug && (
                     <div style={{ color: '#888', fontSize: '11px' }}>{activeSession.projectName}</div>

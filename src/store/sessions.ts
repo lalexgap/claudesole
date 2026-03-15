@@ -13,6 +13,7 @@ export interface Session {
   type: 'claude' | 'shell'
   claudeSessionId?: string // the Claude-assigned session UUID (known for resumed sessions)
   isWorktree?: boolean
+  aiTitle?: string
 }
 
 interface SessionsState {
@@ -26,6 +27,7 @@ interface SessionsState {
   renameSession: (id: string, label: string) => void
   togglePin: (id: string) => void
   reorderSession: (id: string, toIndex: number) => void
+  setAiTitle: (id: string, title: string) => void
 }
 
 export const useSessionsStore = create<SessionsState>((set) => ({
@@ -83,4 +85,9 @@ export const useSessionsStore = create<SessionsState>((set) => ({
       arr.splice(toIndex > from ? toIndex - 1 : toIndex, 0, item)
       return { sessions: arr }
     }),
+
+  setAiTitle: (id: string, title: string) =>
+    set((state) => ({
+      sessions: state.sessions.map((s) => s.id === id ? { ...s, aiTitle: title } : s),
+    })),
 }))

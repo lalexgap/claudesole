@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { getTitleCache } from './titleManager'
 
 export interface ClaudeSession {
   sessionId: string
@@ -12,6 +13,7 @@ export interface ClaudeSession {
   latestPrompt: string
   tokensUsed?: number
   model?: string
+  title?: string
 }
 
 function extractText(content: unknown): string {
@@ -184,8 +186,9 @@ function _listClaudeSessions(): ClaudeSession[] {
       const { cwd, slug, firstPrompt, latestPrompt, tokensUsed, model } = parseFile(filePath, fileSize)
       if (!cwd) continue
 
+      const sessionId = file.name.replace('.jsonl', '')
       sessions.push({
-        sessionId: file.name.replace('.jsonl', ''),
+        sessionId,
         cwd,
         projectName: path.basename(cwd),
         slug: slug || '',
@@ -198,12 +201,22 @@ function _listClaudeSessions(): ClaudeSession[] {
     }
   }
 
+  const titleCache = getTitleCache()
+  for (const s of sessions) {
+    if (titleCache[s.sessionId]) s.title = titleCache[s.sessionId]
+  }
+
   return sessions.sort((a, b) => b.lastActivity - a.lastActivity)
 }
 
 export function latestSessionIdForCwd(cwd: string): string | null {
   const all = listClaudeSessions()
   return all.find(s => s.cwd === cwd)?.sessionId ?? null
+}
+
+export function latestSessionForCwd(cwd: string): ClaudeSession | null {
+  const all = listClaudeSessions()
+  return all.find(s => s.cwd === cwd) ?? null
 }
 
 export function getUsageForCwd(cwd: string): { tokensUsed?: number; model?: string } | null {

@@ -10,7 +10,7 @@ const sessions = new Map<string, IPty>()
 // from a login shell once and reuse it for all spawned processes.
 let resolvedEnv: Record<string, string> | null = null
 
-function getEnv(): Record<string, string> {
+export function getEnv(): Record<string, string> {
   if (resolvedEnv) return resolvedEnv
   const shell = process.env.SHELL || '/bin/zsh'
   try {

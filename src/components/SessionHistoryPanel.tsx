@@ -69,7 +69,17 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
 
   useEffect(() => {
     searchRef.current?.focus()
-    window.electronAPI.listSessions().then(setSessions)
+    window.electronAPI.listSessions().then(all => {
+      setSessions(all)
+      // Fire async title generation for up to 20 uncached sessions
+      const uncached = all.filter(s => !s.title && (s.firstPrompt || s.latestPrompt)).slice(0, 20)
+      for (const s of uncached) {
+        window.electronAPI.generateSessionTitle(s.sessionId, s.firstPrompt, s.latestPrompt || undefined)
+          .then(title => {
+            if (title) setSessions(prev => prev.map(p => p.sessionId === s.sessionId ? { ...p, title } : p))
+          })
+      }
+    })
   }, [])
 
   useEffect(() => {
@@ -103,7 +113,8 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
     s.projectName.toLowerCase().includes(q) ||
     s.slug.toLowerCase().includes(q) ||
     s.cwd.toLowerCase().includes(q) ||
-    s.firstPrompt.toLowerCase().includes(q)
+    s.firstPrompt.toLowerCase().includes(q) ||
+    (s.title || '').toLowerCase().includes(q)
   )
 
   const favSessions = filtered.filter(s => favorites.has(s.sessionId))
@@ -211,7 +222,7 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                           flex: 1,
                         }}>
-                          {session.slug || session.projectName}
+                          {session.title || session.slug || session.projectName}
                         </span>
                         <span style={{ color: '#555', fontSize: '11px', flexShrink: 0 }}>
                           {relativeTime(session.lastActivity)}
@@ -257,7 +268,7 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
               <div style={{ flex: 1 }}>
                 <div style={{ color: '#e5e5e5', fontSize: '18px', fontWeight: 600, marginBottom: '4px' }}>
-                  {selected.slug || selected.projectName}
+                  {selected.title || selected.slug || selected.projectName}
                 </div>
                 {selected.slug && (
                   <div style={{ color: '#666', fontSize: '13px' }}>{selected.projectName}</div>

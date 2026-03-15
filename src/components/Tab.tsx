@@ -124,7 +124,11 @@ export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename,
           />
         ) : (
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-            {splitLabel ?? session.label}
+            {splitLabel ?? (() => {
+              const defaultLabel = session.cwd.split('/').pop() || session.cwd
+              const userRenamed = session.label !== defaultLabel
+              return userRenamed ? session.label : (session.aiTitle || session.label)
+            })()}
           </span>
         )}
         <span

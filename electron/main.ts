@@ -2,8 +2,10 @@ import { app, BrowserWindow, ipcMain, dialog, session, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { createSession, createShellSession, writeToSession, resizeSession, killSession } from './ptyManager'
-import { listClaudeSessions, latestSessionIdForCwd, getUsageForCwd } from './sessionManager'
+import { listClaudeSessions, latestSessionIdForCwd, latestSessionForCwd, getUsageForCwd } from './sessionManager'
 import { getGitInfo, listWorktrees, removeWorktree, listBranches, createWorktree } from './gitInfo'
+import { generateTitle } from './titleManager'
+import { getSettings, saveSettings } from './settingsManager'
 
 function validateDir(p: unknown): string {
   if (typeof p !== 'string' || !path.isAbsolute(p)) throw new Error('Invalid path')
@@ -24,6 +26,7 @@ function setupIpcHandlers() {
   ipcMain.handle('sessions:list', () => listClaudeSessions())
 
   ipcMain.handle('sessions:latestForCwd', (_event, cwd: string) => latestSessionIdForCwd(cwd))
+  ipcMain.handle('sessions:latestSession', (_event, cwd: string) => latestSessionForCwd(cwd))
 
   ipcMain.handle('sessions:getUsage', (_event, cwd: string) => getUsageForCwd(cwd))
 
@@ -105,6 +108,13 @@ function setupIpcHandlers() {
       shell.openExternal(url)
     }
   })
+
+  ipcMain.handle('title:generate', (_e, { sessionId, firstPrompt, latestPrompt }: { sessionId: string; firstPrompt: string; latestPrompt?: string }) =>
+    generateTitle(sessionId, firstPrompt, latestPrompt))
+
+  ipcMain.handle('settings:get', () => getSettings())
+
+  ipcMain.handle('settings:save', (_e, s) => { saveSettings(s); return true })
 }
 
 function createWindow() {

@@ -1,3 +1,10 @@
+export interface AppSettings {
+  titleProvider: 'anthropic' | 'openai-compatible' | 'none'
+  apiKey: string
+  model: string
+  baseUrl: string
+}
+
 export interface Worktree {
   path: string
   branch: string | null
@@ -15,6 +22,7 @@ export interface ClaudeSession {
   latestPrompt: string
   tokensUsed?: number
   model?: string
+  title?: string
 }
 
 export interface ElectronAPI {
@@ -37,6 +45,10 @@ export interface ElectronAPI {
   listBranches: (cwd: string) => Promise<string[]>
   createWorktree: (repoPath: string, branch: string) => Promise<string>
   openExternal: (url: string) => void
+  getLatestSession: (cwd: string) => Promise<ClaudeSession | null>
+  generateSessionTitle: (sessionId: string, firstPrompt: string, latestPrompt?: string) => Promise<string | null>
+  getSettings: () => Promise<AppSettings>
+  saveSettings: (s: AppSettings) => Promise<boolean>
 }
 
 declare global {

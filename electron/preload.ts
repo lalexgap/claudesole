@@ -68,4 +68,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: (url: string) =>
     ipcRenderer.send('shell:openExternal', url),
 
+  getLatestSession: (cwd: string) =>
+    ipcRenderer.invoke('sessions:latestSession', cwd),
+
+  generateSessionTitle: (sessionId: string, firstPrompt: string, latestPrompt?: string): Promise<string | null> =>
+    ipcRenderer.invoke('title:generate', { sessionId, firstPrompt, latestPrompt }),
+
+  getSettings: () => ipcRenderer.invoke('settings:get'),
+
+  saveSettings: (s: unknown) => ipcRenderer.invoke('settings:save', s),
+
 })

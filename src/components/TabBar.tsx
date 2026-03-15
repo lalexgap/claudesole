@@ -23,13 +23,15 @@ interface TabBarProps {
   onToggleSidebar: () => void
   worktreesOpen: boolean
   onToggleWorktrees: () => void
+  settingsOpen: boolean
+  onToggleSettings: () => void
 }
 
 export function TabBar({
   sessions, allSessions, paneRoots, activeId, onSelectTab, onCloseTab, onNewTab, onNewShellTab,
   onRenameTab, onPinTab, onForkTab, onSplitHTab, onSplitVTab,
   historyOpen, onToggleHistory, sidebarOpen, onToggleSidebar,
-  worktreesOpen, onToggleWorktrees,
+  worktreesOpen, onToggleWorktrees, settingsOpen, onToggleSettings,
 }: TabBarProps) {
   const getSplitLabel = (session: Session): string | undefined => {
     const root = paneRoots.get(session.id)
@@ -210,6 +212,25 @@ export function TabBar({
         } as React.CSSProperties}
       >
         ☰
+      </button>
+
+      <button
+        onClick={onToggleSettings}
+        title="Settings (⌘,)"
+        style={{
+          WebkitAppRegion: 'no-drag',
+          background: settingsOpen ? 'rgba(255,255,255,0.08)' : 'none',
+          border: 'none',
+          color: settingsOpen ? '#bbb' : '#555',
+          fontSize: '13px',
+          cursor: 'pointer',
+          padding: '3px 6px',
+          borderRadius: '4px',
+          flexShrink: 0,
+          lineHeight: 1,
+        } as React.CSSProperties}
+      >
+        ⚙
       </button>
     </div>
   )
