@@ -4,8 +4,28 @@ import fs from 'fs'
 import { createSession, createShellSession, writeToSession, resizeSession, killSession } from './ptyManager'
 import { listClaudeSessions, latestSessionIdForCwd, latestSessionForCwd, getUsageForCwd } from './sessionManager'
 import { getGitInfo, listWorktrees, removeWorktree, listBranches, createWorktree } from './gitInfo'
-import { generateTitle } from './titleManager'
+import { generateTitle, generateSummary } from './titleManager'
 import { getSettings, saveSettings } from './settingsManager'
+
+// ── Log capture ──────────────────────────────────────────────────────────────
+interface LogEntry { level: 'log' | 'warn' | 'error'; msg: string; ts: number }
+const logBuffer: LogEntry[] = []
+const MAX_LOG_ENTRIES = 500
+
+function pushLog(level: LogEntry['level'], ...args: unknown[]) {
+  const msg = args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')
+  const entry: LogEntry = { level, msg, ts: Date.now() }
+  logBuffer.push(entry)
+  if (logBuffer.length > MAX_LOG_ENTRIES) logBuffer.shift()
+  win?.webContents.send('logs:entry', entry)
+}
+
+const _log = console.log.bind(console)
+const _warn = console.warn.bind(console)
+const _error = console.error.bind(console)
+console.log = (...a) => { _log(...a); pushLog('log', ...a) }
+console.warn = (...a) => { _warn(...a); pushLog('warn', ...a) }
+console.error = (...a) => { _error(...a); pushLog('error', ...a) }
 
 function validateDir(p: unknown): string {
   if (typeof p !== 'string' || !path.isAbsolute(p)) throw new Error('Invalid path')
@@ -111,6 +131,11 @@ function setupIpcHandlers() {
 
   ipcMain.handle('title:generate', (_e, { sessionId, firstPrompt, latestPrompt }: { sessionId: string; firstPrompt: string; latestPrompt?: string }) =>
     generateTitle(sessionId, firstPrompt, latestPrompt))
+
+  ipcMain.handle('summary:generate', (_e, { sessionId, firstPrompt, latestPrompt }: { sessionId: string; firstPrompt: string; latestPrompt?: string }) =>
+    generateSummary(sessionId, firstPrompt, latestPrompt))
+
+  ipcMain.handle('logs:get', () => [...logBuffer])
 
   ipcMain.handle('settings:get', () => getSettings())
 

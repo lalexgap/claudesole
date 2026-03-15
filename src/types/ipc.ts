@@ -23,6 +23,7 @@ export interface ClaudeSession {
   tokensUsed?: number
   model?: string
   title?: string
+  summary?: string
 }
 
 export interface ElectronAPI {
@@ -47,6 +48,9 @@ export interface ElectronAPI {
   openExternal: (url: string) => void
   getLatestSession: (cwd: string) => Promise<ClaudeSession | null>
   generateSessionTitle: (sessionId: string, firstPrompt: string, latestPrompt?: string) => Promise<string | null>
+  generateSessionSummary: (sessionId: string, firstPrompt: string, latestPrompt?: string) => Promise<string | null>
+  getLogs: () => Promise<{ level: string; msg: string; ts: number }[]>
+  onLog: (callback: (entry: { level: string; msg: string; ts: number }) => void) => () => void
   getSettings: () => Promise<AppSettings>
   saveSettings: (s: AppSettings) => Promise<boolean>
 }

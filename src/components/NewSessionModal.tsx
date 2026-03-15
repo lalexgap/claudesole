@@ -34,6 +34,7 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
   const [selected, setSelected] = useState(0)
   const [hoveredSession, setHoveredSession] = useState<ClaudeSession | null>(null)
   const [skipPermissions, setSkipPermissions] = useState(true)
+  const [summaries, setSummaries] = useState<Record<string, string>>({})
 
   const [step, setStep] = useState<'pick' | 'options'>('pick')
   const [pendingCwd, setPendingCwd] = useState<string | null>(null)
@@ -86,6 +87,14 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
   const activeSession: ClaudeSession | null =
     hoveredSession ??
     (selected < filteredSessions.length ? filteredSessions[selected] : null)
+
+  useEffect(() => {
+    if (!activeSession || !activeSession.firstPrompt) return
+    const id = activeSession.sessionId
+    if (summaries[id] || activeSession.summary) return
+    window.electronAPI.generateSessionSummary(id, activeSession.firstPrompt, activeSession.latestPrompt || undefined)
+      .then(s => { if (s) setSummaries(prev => ({ ...prev, [id]: s })) })
+  }, [activeSession?.sessionId])
 
   const branchInputRef = useRef<HTMLInputElement>(null)
   const branchListRef = useRef<HTMLDivElement>(null)
@@ -461,6 +470,11 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
                     <div style={{ color: '#888', fontSize: '11px' }}>{activeSession.projectName}</div>
                   )}
                 </div>
+                {(summaries[activeSession.sessionId] || activeSession.summary) && (
+                  <div style={{ color: '#777', fontSize: '11px', lineHeight: '1.6', fontStyle: 'italic' }}>
+                    {summaries[activeSession.sessionId] || activeSession.summary}
+                  </div>
+                )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <DetailLabel>Location</DetailLabel>
                   <div style={{ color: '#999', fontSize: '11px', wordBreak: 'break-all' }}>{activeSession.cwd}</div>

@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import { getTitleCache } from './titleManager'
+import { getTitleCache, getCachedSummary } from './titleManager'
 
 export interface ClaudeSession {
   sessionId: string
@@ -14,6 +14,7 @@ export interface ClaudeSession {
   tokensUsed?: number
   model?: string
   title?: string
+  summary?: string
 }
 
 function extractText(content: unknown): string {
@@ -204,6 +205,8 @@ function _listClaudeSessions(): ClaudeSession[] {
   const titleCache = getTitleCache()
   for (const s of sessions) {
     if (titleCache[s.sessionId]) s.title = titleCache[s.sessionId]
+    const summary = getCachedSummary(s.sessionId)
+    if (summary) s.summary = summary
   }
 
   return sessions.sort((a, b) => b.lastActivity - a.lastActivity)

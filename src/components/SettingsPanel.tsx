@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { AppSettings } from '../types/ipc'
 
 interface Props {
@@ -13,10 +13,18 @@ export function SettingsPanel({ onClose }: Props) {
     baseUrl: '',
   })
   const [saved, setSaved] = useState(false)
+  const [logs, setLogs] = useState<{ level: string; msg: string; ts: number }[]>([])
+  const logsEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     window.electronAPI.getSettings().then(setSettings)
+    window.electronAPI.getLogs().then(setLogs)
+    return window.electronAPI.onLog(entry => setLogs(prev => [...prev.slice(-499), entry]))
   }, [])
+
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [logs])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -131,6 +139,37 @@ export function SettingsPanel({ onClose }: Props) {
           >
             {saved ? 'Saved!' : 'Save'}
           </button>
+        </div>
+
+        <div style={{ marginTop: '40px' }}>
+          <SectionHeading>Logs</SectionHeading>
+          <div style={{
+            marginTop: '8px',
+            background: '#0a0a0a',
+            border: '1px solid #1e1e1e',
+            borderRadius: '6px',
+            padding: '10px 12px',
+            height: '260px',
+            overflowY: 'auto',
+            fontFamily: 'monospace',
+            fontSize: '11px',
+          }}>
+            {logs.length === 0 && <span style={{ color: '#333' }}>No logs yet.</span>}
+            {logs.map((entry, i) => (
+              <div key={i} style={{
+                color: entry.level === 'error' ? '#f87171' : entry.level === 'warn' ? '#fbbf24' : '#666',
+                marginBottom: '2px',
+                wordBreak: 'break-all',
+                whiteSpace: 'pre-wrap',
+              }}>
+                <span style={{ color: '#333', marginRight: '6px' }}>
+                  {new Date(entry.ts).toLocaleTimeString()}
+                </span>
+                {entry.msg}
+              </div>
+            ))}
+            <div ref={logsEndRef} />
+          </div>
         </div>
       </div>
     </div>

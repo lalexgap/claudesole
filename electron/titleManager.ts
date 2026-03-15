@@ -50,7 +50,50 @@ function resolveApiKey(settingsKey: string): string | null {
   return null
 }
 
+export function getCachedSummary(sessionId: string): string | undefined {
+  return loadCache()[`${sessionId}:summary`]?.title
+}
+
 const inFlight = new Set<string>()
+
+export async function generateSummary(
+  sessionId: string, firstPrompt: string, latestPrompt?: string
+): Promise<string | null> {
+  const key = `${sessionId}:summary`
+  const cached = loadCache()[key]?.title
+  if (cached) return cached
+  if (inFlight.has(key)) return null
+  inFlight.add(key)
+  try {
+    const settings = getSettings()
+    if (settings.titleProvider === 'none') return null
+    const apiKey = resolveApiKey(settings.apiKey)
+    if (!apiKey) return null
+
+    const context = latestPrompt && latestPrompt !== firstPrompt
+      ? `Opening message: "${firstPrompt.slice(0, 400)}"\nLatest message: "${latestPrompt.slice(0, 300)}"`
+      : `"${firstPrompt.slice(0, 700)}"`
+    const prompt = `Write a 1-2 sentence summary of what was worked on in this conversation: ${context}. Be concise and factual. Reply with only the summary.`
+
+    const model = settings.titleProvider === 'anthropic'
+      ? createAnthropic({ apiKey })(settings.model || 'claude-haiku-4-5-20251001')
+      : createOpenAI({ apiKey, baseURL: settings.baseUrl })(settings.model)
+
+    const { text } = await generateText({ model, prompt, maxTokens: 80 })
+    const raw = text.trim().replace(/^["']|["']$/g, '').slice(0, 300)
+    if (!raw) return null
+
+    loadCache()
+    memCache[key] = { title: raw, generatedAt: Date.now() }
+    saveCache()
+    return raw
+  } catch (err) {
+    console.error('[titleManager] summary generation failed:', err)
+    return null
+  } finally {
+    inFlight.delete(key)
+  }
+}
 
 export async function generateTitle(
   sessionId: string, firstPrompt: string, latestPrompt?: string

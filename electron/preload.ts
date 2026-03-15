@@ -74,6 +74,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   generateSessionTitle: (sessionId: string, firstPrompt: string, latestPrompt?: string): Promise<string | null> =>
     ipcRenderer.invoke('title:generate', { sessionId, firstPrompt, latestPrompt }),
 
+  generateSessionSummary: (sessionId: string, firstPrompt: string, latestPrompt?: string): Promise<string | null> =>
+    ipcRenderer.invoke('summary:generate', { sessionId, firstPrompt, latestPrompt }),
+
+  getLogs: (): Promise<{ level: string; msg: string; ts: number }[]> =>
+    ipcRenderer.invoke('logs:get'),
+
+  onLog: (callback: (entry: { level: string; msg: string; ts: number }) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, entry: { level: string; msg: string; ts: number }) => callback(entry)
+    ipcRenderer.on('logs:entry', handler)
+    return () => ipcRenderer.removeListener('logs:entry', handler)
+  },
+
   getSettings: () => ipcRenderer.invoke('settings:get'),
 
   saveSettings: (s: unknown) => ipcRenderer.invoke('settings:save', s),

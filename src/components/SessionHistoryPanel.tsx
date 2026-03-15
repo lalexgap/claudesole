@@ -65,6 +65,7 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
   const [favorites, setFavorites] = useState<Set<string>>(loadFavorites)
   const [hoveredRow, setHoveredRow] = useState<string | null>(null)
   const [gitInfo, setGitInfo] = useState<{ branch: string | null; isWorktree: boolean } | null>(null)
+  const [summary, setSummary] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -86,6 +87,14 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
     setGitInfo(null)
     if (!selected?.cwd) return
     window.electronAPI.getGitInfo(selected.cwd).then(setGitInfo)
+  }, [selected?.sessionId])
+
+  useEffect(() => {
+    setSummary(selected?.summary ?? null)
+    if (!selected || !selected.firstPrompt) return
+    if (selected.summary) return
+    window.electronAPI.generateSessionSummary(selected.sessionId, selected.firstPrompt, selected.latestPrompt || undefined)
+      .then(s => { if (s) { setSummary(s); setSessions(prev => prev.map(p => p.sessionId === selected.sessionId ? { ...p, summary: s } : p)) } })
   }, [selected?.sessionId])
 
   useEffect(() => {
@@ -286,6 +295,15 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
                 ★
               </span>
             </div>
+
+            {summary && (
+              <div style={{ color: '#888', fontSize: '12px', lineHeight: '1.6', fontStyle: 'italic' }}>
+                {summary}
+              </div>
+            )}
+            {!summary && selected.firstPrompt && (
+              <div style={{ color: '#444', fontSize: '11px', fontStyle: 'italic' }}>Generating summary…</div>
+            )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <Label>Location</Label>
