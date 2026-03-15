@@ -77,7 +77,7 @@ export async function generateSummary(
 
     const model = settings.titleProvider === 'anthropic'
       ? createAnthropic({ apiKey })(settings.model || 'claude-haiku-4-5-20251001')
-      : createOpenAI({ apiKey, baseURL: settings.baseUrl })(settings.model)
+      : createOpenAI({ apiKey, baseURL: settings.baseUrl, compatibility: 'compatible' })(settings.model)
 
     const { text } = await generateText({ model, prompt, maxTokens: 80 })
     const raw = text.trim().replace(/^["']|["']$/g, '').slice(0, 300)
@@ -115,7 +115,7 @@ export async function generateTitle(
 
     const model = settings.titleProvider === 'anthropic'
       ? createAnthropic({ apiKey })(settings.model || 'claude-haiku-4-5-20251001')
-      : createOpenAI({ apiKey, baseURL: settings.baseUrl })(settings.model)
+      : createOpenAI({ apiKey, baseURL: settings.baseUrl, compatibility: 'compatible' })(settings.model)
 
     const { text } = await generateText({ model, prompt, maxTokens: 20 })
     const raw = text.trim().replace(/^["']|["']$/g, '').slice(0, 60)
