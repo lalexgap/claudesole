@@ -15,7 +15,8 @@
     "productName": "Claudesole",
     "asar": true,
     "asarUnpack": [
-      "**/node_modules/node-pty/**"
+      "**/node_modules/node-pty/**",
+      "**/node_modules/zod/**"
     ],
     "directories": {
       "buildResources": "build",
