@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
+import clsx from 'clsx'
 
 // ── Pane tree types ─────────────────────────────────────────────────────────
 
@@ -155,13 +156,16 @@ export function SplitDividers({
           onMouseDown={e => handleMouseDown(e, d)}
           onMouseEnter={() => setHoveredPath(d.path)}
           onMouseLeave={() => setHoveredPath(null)}
+          className={clsx(
+            'absolute z-10 transition-colors duration-150',
+            d.dir === 'h' ? 'cursor-col-resize' : 'cursor-row-resize',
+            hoveredPath === d.path ? 'bg-app-400' : 'bg-app-800',
+          )}
           style={{
-            position: 'absolute',
-            left: d.left, top: d.top, width: d.width, height: d.height,
-            background: hoveredPath === d.path ? '#333' : '#1a1a1a',
-            cursor: d.dir === 'h' ? 'col-resize' : 'row-resize',
-            zIndex: 10,
-            transition: 'background 0.15s',
+            left: d.left,
+            top: d.top,
+            width: d.width,
+            height: d.height,
           }}
         />
       ))}

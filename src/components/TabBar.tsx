@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react'
+import clsx from 'clsx'
 import { Session, useSessionsStore } from '../store/sessions'
 import { Tab } from './Tab'
 import { PaneNode, getLeafIds } from './SplitView'
@@ -72,27 +73,25 @@ export function TabBar({
   }
 
   const indicator = (
-    <div style={{ width: '2px', height: '24px', background: '#4ade80', borderRadius: '1px', flexShrink: 0 }} />
+    <div className="w-0.5 h-6 bg-green-400 rounded-sm shrink-0" />
+  )
+
+  const toolbarBtnCls = (isOpen: boolean) => clsx(
+    'border-0 cursor-pointer px-1.5 py-[3px] rounded shrink-0 leading-none text-xs',
+    isOpen ? 'bg-white/[0.08] text-[#bbb]' : 'bg-transparent text-[#555]'
   )
 
   return (
     <div
       onDrop={handleDrop}
       onDragOver={e => e.preventDefault()}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        height: '40px',
-        paddingRight: '8px',
-        background: '#111',
-        borderBottom: '1px solid #222',
-        gap: '2px',
-        overflowX: 'auto',
-        flexShrink: 0,
-      }}
+      className="flex items-center h-10 pr-2 bg-app-900 border-b border-app-650 gap-0.5 overflow-x-auto shrink-0"
     >
       {/* Traffic light spacer — draggable so window can be moved from this area */}
-      <div style={{ width: '76px', flexShrink: 0, alignSelf: 'stretch', WebkitAppRegion: 'drag' } as React.CSSProperties} />
+      <div
+        className="w-[76px] shrink-0 self-stretch"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      />
 
       {sessions.map((session, i) => (
         <React.Fragment key={session.id}>
@@ -118,18 +117,8 @@ export function TabBar({
 
       <button
         onClick={onNewTab}
-        style={{
-          WebkitAppRegion: 'no-drag',
-          background: 'none',
-          border: 'none',
-          color: '#666',
-          fontSize: '20px',
-          lineHeight: 1,
-          cursor: 'pointer',
-          padding: '0 8px',
-          borderRadius: '4px',
-          flexShrink: 0,
-        } as React.CSSProperties}
+        className="bg-transparent border-0 text-[#666] text-xl leading-none cursor-pointer px-2 rounded shrink-0"
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         title="New session (⌘T)"
       >
         +
@@ -137,41 +126,20 @@ export function TabBar({
 
       <button
         onClick={onNewShellTab}
-        style={{
-          WebkitAppRegion: 'no-drag',
-          background: 'none',
-          border: 'none',
-          color: '#555',
-          fontSize: '11px',
-          fontFamily: 'monospace',
-          lineHeight: 1,
-          cursor: 'pointer',
-          padding: '2px 6px',
-          borderRadius: '4px',
-          flexShrink: 0,
-        } as React.CSSProperties}
+        className="bg-transparent border-0 text-[#555] text-[11px] font-mono leading-none cursor-pointer px-1.5 py-0.5 rounded shrink-0"
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         title="New shell tab"
       >
         $
       </button>
 
-      <div style={{ flex: 1, WebkitAppRegion: 'drag' } as React.CSSProperties} />
+      <div className="flex-1" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties} />
 
       <button
         onClick={onToggleHistory}
         title="Session history (⌘H)"
-        style={{
-          WebkitAppRegion: 'no-drag',
-          background: historyOpen ? 'rgba(255,255,255,0.08)' : 'none',
-          border: 'none',
-          color: historyOpen ? '#bbb' : '#555',
-          fontSize: '12px',
-          cursor: 'pointer',
-          padding: '3px 6px',
-          borderRadius: '4px',
-          flexShrink: 0,
-          lineHeight: 1,
-        } as React.CSSProperties}
+        className={toolbarBtnCls(historyOpen)}
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         ◷
       </button>
@@ -179,18 +147,8 @@ export function TabBar({
       <button
         onClick={onToggleWorktrees}
         title="Git worktrees (⌘⇧G)"
-        style={{
-          WebkitAppRegion: 'no-drag',
-          background: worktreesOpen ? 'rgba(255,255,255,0.08)' : 'none',
-          border: 'none',
-          color: worktreesOpen ? '#bbb' : '#555',
-          fontSize: '13px',
-          cursor: 'pointer',
-          padding: '3px 6px',
-          borderRadius: '4px',
-          flexShrink: 0,
-          lineHeight: 1,
-        } as React.CSSProperties}
+        className={toolbarBtnCls(worktreesOpen)}
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         ⎇
       </button>
@@ -198,18 +156,8 @@ export function TabBar({
       <button
         onClick={onToggleSidebar}
         title="Toggle sessions sidebar (⌘B)"
-        style={{
-          WebkitAppRegion: 'no-drag',
-          background: sidebarOpen ? 'rgba(255,255,255,0.08)' : 'none',
-          border: 'none',
-          color: sidebarOpen ? '#bbb' : '#555',
-          fontSize: '13px',
-          cursor: 'pointer',
-          padding: '3px 6px',
-          borderRadius: '4px',
-          flexShrink: 0,
-          lineHeight: 1,
-        } as React.CSSProperties}
+        className={toolbarBtnCls(sidebarOpen)}
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         ☰
       </button>
@@ -217,18 +165,8 @@ export function TabBar({
       <button
         onClick={onToggleSettings}
         title="Settings (⌘,)"
-        style={{
-          WebkitAppRegion: 'no-drag',
-          background: settingsOpen ? 'rgba(255,255,255,0.08)' : 'none',
-          border: 'none',
-          color: settingsOpen ? '#bbb' : '#555',
-          fontSize: '13px',
-          cursor: 'pointer',
-          padding: '3px 6px',
-          borderRadius: '4px',
-          flexShrink: 0,
-          lineHeight: 1,
-        } as React.CSSProperties}
+        className={toolbarBtnCls(settingsOpen)}
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         ⚙
       </button>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import clsx from 'clsx'
 import { Session } from '../store/sessions'
 import { Worktree } from '../types/ipc'
 
@@ -123,68 +124,20 @@ export function WorktreePanel({ sessions, onOpenSession, onClose }: Props) {
     setConfirm(null)
   }
 
-  const buttonStyle = {
-    background: 'rgba(255,255,255,0.06)',
-    border: '1px solid #2a2a2a',
-    borderRadius: '4px',
-    color: '#888',
-    fontSize: '11px',
-    cursor: 'pointer',
-    padding: '2px 7px',
-    lineHeight: '16px',
-  }
-
-  const dangerButtonStyle = {
-    ...buttonStyle,
-    color: '#f87171',
-    borderColor: 'rgba(248,113,113,0.3)',
-    background: 'rgba(248,113,113,0.08)',
-  }
+  const btnCls = 'bg-white/[0.06] border border-app-500 rounded text-[#888] text-[11px] cursor-pointer px-[7px] leading-4'
+  const dangerBtnCls = 'bg-red-400/[0.08] border border-red-400/30 rounded text-red-400 text-[11px] cursor-pointer px-[7px] leading-4'
 
   return (
-    <div style={{
-      position: 'absolute',
-      top: 0,
-      right: 0,
-      bottom: 0,
-      width: '340px',
-      background: '#1a1a1a',
-      borderLeft: '1px solid #2a2a2a',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-      zIndex: 10,
-    }}>
+    <div className="absolute top-0 right-0 bottom-0 w-[340px] bg-app-800 border-l border-app-500 flex flex-col overflow-hidden z-10">
       {/* Header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        padding: '10px 14px',
-        borderBottom: '1px solid #222',
-        flexShrink: 0,
-      }}>
-        <span style={{ color: '#555', fontSize: '13px', marginRight: '6px' }}>⎇</span>
-        <span style={{
-          flex: 1,
-          fontSize: '12px',
-          fontWeight: 600,
-          color: '#bbb',
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-        }}>
+      <div className="flex items-center px-3.5 py-2.5 border-b border-app-650 shrink-0">
+        <span className="text-[#555] text-[13px] mr-1.5">⎇</span>
+        <span className="flex-1 text-xs font-semibold text-[#bbb] uppercase tracking-[0.08em]">
           Git Worktrees
         </span>
         <button
           onClick={onClose}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#666',
-            fontSize: '16px',
-            cursor: 'pointer',
-            lineHeight: 1,
-            padding: '0 2px',
-          }}
+          className="bg-transparent border-0 text-[#666] text-base cursor-pointer leading-none px-0.5"
           title="Close"
         >
           ×
@@ -192,33 +145,27 @@ export function WorktreePanel({ sessions, onOpenSession, onClose }: Props) {
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div className="flex-1 overflow-y-auto">
         {loading && (
-          <div style={{ padding: '16px 14px', color: '#555', fontSize: '12px' }}>
+          <div className="px-3.5 py-4 text-[#555] text-xs">
             Loading worktrees…
           </div>
         )}
 
         {!loading && worktreesByRepo.size === 0 && (
-          <div style={{ padding: '16px 14px', color: '#555', fontSize: '12px' }}>
-            No linked worktrees found. Create one with <code style={{ fontFamily: 'monospace', background: 'rgba(255,255,255,0.06)', padding: '1px 4px', borderRadius: '3px' }}>git worktree add</code> or use --worktree when starting a session.
+          <div className="px-3.5 py-4 text-[#555] text-xs">
+            No linked worktrees found. Create one with{' '}
+            <code className="font-mono bg-white/[0.06] px-1 rounded-sm">git worktree add</code>{' '}
+            or use --worktree when starting a session.
           </div>
         )}
 
         {!loading && [...worktreesByRepo.entries()].map(([repoRoot, worktrees]) => (
           <div key={repoRoot}>
             {/* Repo section header */}
-            <div style={{
-              padding: '8px 14px 4px',
-              fontSize: '10px',
-              color: '#555',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              borderTop: '1px solid #222',
-            }}>
+            <div className="px-3.5 pt-2 pb-1 text-[10px] text-[#555] font-semibold uppercase tracking-[0.08em] border-t border-app-650">
               {repoName(repoRoot)}
-              <span style={{ color: '#3a3a3a', fontWeight: 400, marginLeft: '6px', textTransform: 'none', letterSpacing: 0 }}>
+              <span className="text-[#3a3a3a] font-normal ml-1.5 normal-case tracking-normal">
                 {shortenPath(repoRoot)}
               </span>
             </div>
@@ -230,96 +177,75 @@ export function WorktreePanel({ sessions, onOpenSession, onClose }: Props) {
               const errorMsg = errors.get(wt.path)
 
               return (
-                <div key={wt.path} style={{
-                  padding: '8px 14px',
-                  borderBottom: '1px solid #1e1e1e',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                    {/* Green dot for open session */}
-                    <div style={{
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '50%',
-                      background: hasOpenSession ? '#4ade80' : '#333',
-                      flexShrink: 0,
-                    }} />
-
-                    {/* Branch name */}
-                    <span style={{
-                      fontSize: '13px',
-                      color: wt.branch ? '#e5e5e5' : '#666',
-                      fontStyle: wt.branch ? 'normal' : 'italic',
-                      flex: 1,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}>
+                <div key={wt.path} className="px-3.5 py-2 border-b border-app-700">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <div className={clsx(
+                      'w-1.5 h-1.5 rounded-full shrink-0',
+                      hasOpenSession ? 'bg-green-400' : 'bg-[#333]'
+                    )} />
+                    <span className={clsx(
+                      'text-[13px] flex-1 overflow-hidden text-ellipsis whitespace-nowrap',
+                      wt.branch ? 'text-neutral-200' : 'text-[#666] italic'
+                    )}>
                       {wt.branch ?? 'detached'}
                     </span>
-
                   </div>
 
-                  {/* Path */}
-                  <div style={{
-                    fontSize: '10px',
-                    color: '#555',
-                    marginLeft: '12px',
-                    marginBottom: confirmingThis || errorMsg ? '6px' : 0,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}>
+                  <div className={clsx(
+                    'text-[10px] text-[#555] ml-3 overflow-hidden text-ellipsis whitespace-nowrap',
+                    (confirmingThis || errorMsg) ? 'mb-1.5' : 'mb-0'
+                  )}>
                     {shortenPath(wt.path)}
                   </div>
 
-                  {/* Error message */}
                   {errorMsg && !confirmingThis && (
-                    <div style={{ fontSize: '11px', color: '#f87171', marginLeft: '12px', marginBottom: '4px' }}>
-                      {errorMsg}
-                    </div>
+                    <div className="text-[11px] text-red-400 ml-3 mb-1">{errorMsg}</div>
                   )}
 
-                  <div style={{ display: 'flex', gap: '6px', marginLeft: '12px', alignItems: 'center' }}>
-                      {confirmingThis ? (
-                        <>
-                          <span style={{ fontSize: '11px', color: '#aaa' }}>
-                            {confirm.stage === 'force' ? 'Force remove?' : 'Remove?'}
+                  <div className="flex gap-1.5 ml-3 items-center">
+                    {confirmingThis ? (
+                      <>
+                        <span className="text-[11px] text-[#aaa]">
+                          {confirm.stage === 'force' ? 'Force remove?' : 'Remove?'}
+                        </span>
+                        {confirm.stage === 'force' && errorMsg && (
+                          <span
+                            className="text-[10px] text-red-400 max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap"
+                            title={errorMsg}
+                          >
+                            {errorMsg}
                           </span>
-                          {confirm.stage === 'force' && errorMsg && (
-                            <span style={{ fontSize: '10px', color: '#f87171', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={errorMsg}>
-                              {errorMsg}
-                            </span>
-                          )}
-                          <button
-                            onClick={() => handleConfirmYes(wt, confirm.stage === 'force')}
-                            style={confirm.stage === 'force' ? dangerButtonStyle : buttonStyle}
-                          >
-                            Yes
-                          </button>
-                          <button onClick={handleConfirmNo} style={buttonStyle}>
-                            No
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => onOpenSession(wt.path)}
-                            style={buttonStyle}
-                            title={`Open session in ${wt.path}`}
-                          >
-                            Open
-                          </button>
-                          <button
-                            onClick={() => handleRemoveClick(wt)}
-                            style={dangerButtonStyle}
-                            disabled={isRemoving}
-                            title={`Remove worktree ${wt.path}`}
-                          >
-                            {isRemoving ? 'Removing…' : 'Remove'}
-                          </button>
-                        </>
-                      )}
-                    </div>
+                        )}
+                        <button
+                          onClick={() => handleConfirmYes(wt, confirm.stage === 'force')}
+                          className={confirm.stage === 'force' ? dangerBtnCls : btnCls}
+                        >
+                          Yes
+                        </button>
+                        <button onClick={handleConfirmNo} className={btnCls}>
+                          No
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => onOpenSession(wt.path)}
+                          className={btnCls}
+                          title={`Open session in ${wt.path}`}
+                        >
+                          Open
+                        </button>
+                        <button
+                          onClick={() => handleRemoveClick(wt)}
+                          className={dangerBtnCls}
+                          disabled={isRemoving}
+                          title={`Remove worktree ${wt.path}`}
+                        >
+                          {isRemoving ? 'Removing…' : 'Remove'}
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               )
             })}
@@ -328,18 +254,9 @@ export function WorktreePanel({ sessions, onOpenSession, onClose }: Props) {
 
         {/* Prune stale note */}
         {!loading && [...worktreesByRepo.values()].some(list => list.some(wt => wt.branch === null && !wt.isMain)) && (
-          <div style={{
-            margin: '12px 14px',
-            padding: '8px 10px',
-            background: 'rgba(251,191,36,0.08)',
-            border: '1px solid rgba(251,191,36,0.2)',
-            borderRadius: '5px',
-            fontSize: '11px',
-            color: '#fbbf24',
-            lineHeight: 1.5,
-          }}>
+          <div className="mx-3.5 my-3 px-2.5 py-2 bg-amber-400/[0.08] border border-amber-400/20 rounded text-[11px] text-amber-400 leading-[1.5]">
             Some worktrees have no branch (detached HEAD). Run{' '}
-            <code style={{ fontFamily: 'monospace', background: 'rgba(255,255,255,0.08)', padding: '1px 4px', borderRadius: '3px' }}>
+            <code className="font-mono bg-white/[0.08] px-1 rounded-sm">
               git worktree prune
             </code>{' '}
             to remove stale entries.

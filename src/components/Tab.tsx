@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import clsx from 'clsx'
 import { Session } from '../store/sessions'
 
 interface TabProps {
@@ -26,16 +27,7 @@ export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename,
   const inputRef = useRef<HTMLInputElement>(null)
 
   const isShell = session.type === 'shell'
-  const bg = isShell
-    ? session.status === 'running'
-      ? isActive ? 'rgba(96,165,250,0.18)' : 'rgba(96,165,250,0.13)'
-      : isActive ? 'rgba(100,116,139,0.18)' : 'rgba(100,116,139,0.10)'
-    : session.status === 'running'
-      ? isActive ? 'rgba(74,222,128,0.18)' : 'rgba(74,222,128,0.13)'
-      : isActive ? 'rgba(248,113,113,0.18)' : 'rgba(248,113,113,0.13)'
-  const borderColor = isShell
-    ? session.status === 'running' ? 'rgba(96,165,250,0.35)' : 'rgba(100,116,139,0.35)'
-    : session.status === 'running' ? 'rgba(74,222,128,0.35)' : 'rgba(248,113,113,0.35)'
+  const isRunning = session.status === 'running'
 
   const startEdit = () => {
     setEditValue(session.label)
@@ -54,6 +46,30 @@ export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename,
     setCtxMenu({ x: e.clientX, y: e.clientY })
   }
 
+  const bgCls = clsx({
+    // Shell running
+    'bg-blue-400/[0.18]': isShell && isRunning && isActive,
+    'bg-blue-400/[0.13]': isShell && isRunning && !isActive,
+    // Shell idle
+    'bg-slate-500/[0.18]': isShell && !isRunning && isActive,
+    'bg-slate-500/[0.10]': isShell && !isRunning && !isActive,
+    // Claude running
+    'bg-green-400/[0.18]': !isShell && isRunning && isActive,
+    'bg-green-400/[0.13]': !isShell && isRunning && !isActive,
+    // Claude waiting
+    'bg-red-400/[0.18]': !isShell && !isRunning && isActive,
+    'bg-red-400/[0.13]': !isShell && !isRunning && !isActive,
+  })
+
+  const borderCls = isActive
+    ? clsx({
+        'border-blue-400/[0.35]': isShell && isRunning,
+        'border-slate-500/[0.35]': isShell && !isRunning,
+        'border-green-400/[0.35]': !isShell && isRunning,
+        'border-red-400/[0.35]': !isShell && !isRunning,
+      })
+    : 'border-transparent'
+
   return (
     <>
       <div
@@ -69,33 +85,23 @@ export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename,
         onMouseUp={() => setDraggable(false)}
         onDragStart={onDragStart}
         onDragOver={e => divRef.current && onDragOver?.(e, divRef.current)}
-        onDragEnd={e => { setDraggable(false); onDragEnd?.() }}
-        style={{
-          WebkitAppRegion: 'no-drag',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px',
-          padding: '4px 10px 4px 8px',
-          borderRadius: '6px',
-          cursor: 'pointer',
-          background: bg,
-          border: `1px solid ${isActive ? borderColor : 'transparent'}`,
-          color: isActive ? '#fff' : '#aaa',
-          fontSize: '13px',
-          userSelect: 'none',
-          maxWidth: '160px',
-          flexShrink: 0,
-          transition: 'background 0.3s, border-color 0.3s',
-        } as React.CSSProperties}
+        onDragEnd={() => { setDraggable(false); onDragEnd?.() }}
+        className={clsx(
+          'flex items-center gap-1 py-1 pl-2 pr-2.5 rounded-md cursor-pointer border select-none max-w-[160px] shrink-0 transition-[background,border-color] duration-300',
+          isActive ? 'text-white' : 'text-[#aaa]',
+          bgCls,
+          borderCls,
+        )}
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         {session.pinned && (
-          <span style={{ fontSize: '9px', color: '#f6c90e', flexShrink: 0, lineHeight: 1 }}>★</span>
+          <span className="text-[9px] text-gold shrink-0 leading-none">★</span>
         )}
         {isShell ? (
-          <span style={{ fontSize: '10px', color: '#60a5fa', flexShrink: 0, lineHeight: 1, opacity: 0.8 }}>$</span>
+          <span className="text-[10px] text-blue-400 shrink-0 leading-none opacity-80">$</span>
         ) : (
-          <span style={{ fontSize: '11px', flexShrink: 0, lineHeight: 1 }}>
-            {session.status === 'running' ? '🤖' : '👤'}
+          <span className="text-[11px] shrink-0 leading-none">
+            {isRunning ? '🤖' : '👤'}
           </span>
         )}
         {editing ? (
@@ -110,20 +116,10 @@ export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename,
               e.stopPropagation()
             }}
             onClick={e => e.stopPropagation()}
-            style={{
-              flex: 1,
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: '3px',
-              color: '#fff',
-              fontSize: '12px',
-              padding: '1px 4px',
-              outline: 'none',
-              width: '90px',
-            }}
+            className="flex-1 bg-white/10 border border-white/20 rounded-sm text-white text-xs px-1 py-px outline-none w-[90px]"
           />
         ) : (
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+          <span className="overflow-hidden text-ellipsis whitespace-nowrap flex-1 text-[13px]">
             {splitLabel ?? (() => {
               const defaultLabel = session.cwd.split('/').pop() || session.cwd
               const userRenamed = session.label !== defaultLabel
@@ -133,15 +129,8 @@ export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename,
         )}
         <span
           onClick={onClose}
-          style={{
-            WebkitAppRegion: 'no-drag',
-            fontSize: '14px',
-            lineHeight: 1,
-            color: '#777',
-            marginLeft: '2px',
-            cursor: 'pointer',
-            flexShrink: 0,
-          } as React.CSSProperties}
+          className="text-sm leading-none text-[#777] ml-0.5 cursor-pointer shrink-0"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           ×
         </span>
@@ -181,27 +170,17 @@ function TabContextMenu({ x, y, isPinned, isShell, onClose, onRename, onPin, onF
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        top: y,
-        left: x,
-        zIndex: 9999,
-        background: '#1e1e1e',
-        border: '1px solid #333',
-        borderRadius: '8px',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
-        padding: '4px',
-        minWidth: '160px',
-      }}
+      className="fixed z-[9999] bg-app-750 border border-app-400 rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.6)] p-1 min-w-[160px]"
+      style={{ top: y, left: x }}
       onClick={e => e.stopPropagation()}
     >
       <CtxItem onClick={onRename}>Rename</CtxItem>
       <CtxItem onClick={onPin}>{isPinned ? 'Unpin' : 'Pin'}</CtxItem>
       {!isShell && <CtxItem onClick={onFork}>Fork (new in same dir)</CtxItem>}
-      <div style={{ height: '1px', background: '#2a2a2a', margin: '3px 0' }} />
+      <div className="h-px bg-app-500 my-[3px]" />
       <CtxItem onClick={onSplitH}>Split right →</CtxItem>
       <CtxItem onClick={onSplitV}>Split below ↓</CtxItem>
-      <div style={{ height: '1px', background: '#2a2a2a', margin: '3px 0' }} />
+      <div className="h-px bg-app-500 my-[3px]" />
       <CtxItem onClick={onCloseTab} danger>Close tab</CtxItem>
     </div>
   )
@@ -218,14 +197,13 @@ function CtxItem({ children, onClick, danger }: {
       onClick={onClick}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
-      style={{
-        padding: '6px 10px',
-        borderRadius: '5px',
-        cursor: 'pointer',
-        fontSize: '12px',
-        color: danger ? (hov ? '#ff7070' : '#cc4444') : (hov ? '#e5e5e5' : '#aaa'),
-        background: hov ? 'rgba(255,255,255,0.06)' : 'transparent',
-      }}
+      className={clsx(
+        'px-2.5 py-1.5 rounded cursor-pointer text-xs',
+        hov ? 'bg-white/[0.06]' : 'bg-transparent',
+        danger
+          ? hov ? 'text-[#ff7070]' : 'text-[#cc4444]'
+          : hov ? 'text-neutral-200' : 'text-[#aaa]',
+      )}
     >
       {children}
     </div>
