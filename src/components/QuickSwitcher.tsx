@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import clsx from 'clsx'
 import { Session } from '../store/sessions'
 
 interface Props {
@@ -33,11 +34,11 @@ export function QuickSwitcher({ sessions, activeId, onSelect, onClose }: Props) 
 
   return (
     <div
-      style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '80px', background: 'rgba(0,0,0,0.55)' }}
+      className="fixed inset-0 z-[9999] flex items-start justify-center pt-20 bg-black/55"
       onClick={onClose}
     >
       <div
-        style={{ background: '#1e1e1e', border: '1px solid #333', borderRadius: '10px', width: '480px', maxHeight: '420px', boxShadow: '0 16px 48px rgba(0,0,0,0.8)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+        className="bg-app-750 border border-app-400 rounded-[10px] w-[480px] max-h-[420px] shadow-[0_16px_48px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         <input
@@ -46,41 +47,44 @@ export function QuickSwitcher({ sessions, activeId, onSelect, onClose }: Props) 
           onChange={e => setQuery(e.target.value)}
           onKeyDown={handleKey}
           placeholder="Switch to session…"
-          style={{ background: 'transparent', border: 'none', borderBottom: '1px solid #2a2a2a', outline: 'none', color: '#e5e5e5', fontSize: '14px', padding: '14px 16px' }}
+          className="bg-transparent border-0 border-b border-app-500 outline-none text-neutral-200 text-sm px-4 py-3.5"
         />
 
-        <div style={{ overflowY: 'auto' }}>
+        <div className="overflow-y-auto">
           {filtered.length === 0 && (
-            <div style={{ padding: '20px 16px', color: '#555', fontSize: '13px', textAlign: 'center' }}>No sessions match</div>
+            <div className="px-4 py-5 text-[#555] text-[13px] text-center">No sessions match</div>
           )}
           {filtered.map((s, i) => (
             <div
               key={s.id}
               onClick={() => commit(s)}
               onMouseEnter={() => setIdx(i)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '10px',
-                padding: '9px 16px', cursor: 'pointer',
-                background: i === idx ? 'rgba(255,255,255,0.07)' : 'transparent',
-                borderLeft: i === idx ? '2px solid #4ade80' : '2px solid transparent',
-              }}
+              className={clsx(
+                'flex items-center gap-2.5 px-4 py-[9px] cursor-pointer border-l-2',
+                i === idx ? 'bg-white/[0.07] border-green-400' : 'bg-transparent border-transparent'
+              )}
             >
-              <span style={{
-                width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0,
-                background: s.type === 'shell'
-                  ? (s.status === 'running' ? '#60a5fa' : '#64748b')
-                  : (s.status === 'running' ? '#4ade80' : '#f87171'),
-              }} />
-              <div style={{ flex: 1, overflow: 'hidden' }}>
-                <div style={{ color: s.id === activeId ? '#fff' : '#ccc', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {s.pinned && <span style={{ color: '#f6c90e', marginRight: '4px', fontSize: '10px' }}>★</span>}
+              <span className={clsx(
+                'w-[7px] h-[7px] rounded-full shrink-0',
+                s.type === 'shell'
+                  ? s.status === 'running' ? 'bg-blue-400' : 'bg-slate-500'
+                  : s.status === 'running' ? 'bg-green-400' : 'bg-red-400',
+              )} />
+              <div className="flex-1 overflow-hidden">
+                <div className={clsx(
+                  'text-[13px] overflow-hidden text-ellipsis whitespace-nowrap',
+                  s.id === activeId ? 'text-white' : 'text-[#ccc]'
+                )}>
+                  {s.pinned && <span className="text-gold mr-1 text-[10px]">★</span>}
                   {s.label}
                 </div>
-                <div style={{ color: '#555', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>
+                <div className="text-[#555] text-[11px] overflow-hidden text-ellipsis whitespace-nowrap mt-px">
                   {s.cwd}
                 </div>
               </div>
-              {s.type === 'shell' && <span style={{ color: '#60a5fa', fontSize: '10px', fontFamily: 'monospace' }}>$</span>}
+              {s.type === 'shell' && (
+                <span className="text-blue-400 text-[10px] font-mono">$</span>
+              )}
             </div>
           ))}
         </div>

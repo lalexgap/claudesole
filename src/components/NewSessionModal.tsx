@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import clsx from 'clsx'
 import { ClaudeSession } from '../types/ipc'
 
 function relativeTime(ms: number): string {
@@ -197,65 +198,55 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
   const shellFolderOffset = browseOffset + 1
   const shellBrowseOffset = shellFolderOffset + recentFolders.length
 
-  const rowStyle = (idx: number): React.CSSProperties => ({
-    padding: '8px 12px',
-    cursor: 'pointer',
-    background: selected === idx ? 'rgba(255,255,255,0.07)' : 'transparent',
-    borderRadius: '6px',
-    margin: '1px 4px',
-  })
+  const rowCls = (idx: number) => clsx(
+    'px-3 py-2 cursor-pointer rounded-md mx-1 my-px',
+    selected === idx ? 'bg-white/[0.07]' : 'bg-transparent'
+  )
+
+  const shortenParent = (cwd: string) => {
+    const parts = cwd.split('/')
+    const parent = parts.slice(0, -1).join('/')
+    const username = parts[2] ?? ''
+    return parent.replace(`/Users/${username}`, '~')
+  }
 
   return (
     <div
       onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0,
-        background: 'rgba(0,0,0,0.65)',
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-        paddingTop: '80px',
-        zIndex: 1000,
-      }}
+      className="fixed inset-0 bg-black/65 flex items-start justify-center pt-20 z-[1000]"
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{
-          display: 'flex',
-          height: '520px',
-          background: '#1c1c1c',
-          borderRadius: '12px',
-          border: '1px solid #323232',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
-          overflow: 'hidden',
-        }}
+        className="flex h-[520px] bg-app-750 rounded-xl border border-app-450 shadow-[0_24px_64px_rgba(0,0,0,0.6)] overflow-hidden"
       >
         {step === 'pick' ? (
           /* ── Step 1: Session / folder picker ── */
-          <div style={{ width: '360px', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ flexShrink: 0, borderBottom: '1px solid #272727' }}>
-              <div style={{ padding: '12px 14px 10px' }}>
+          <div className="w-[360px] flex flex-col">
+            <div className="shrink-0 border-b border-app-550">
+              <div className="px-3.5 pt-3 pb-2.5">
                 <input
                   ref={searchRef}
                   value={query}
                   onChange={e => setQuery(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Tab') { e.preventDefault(); cycleSection(e.shiftKey) } }}
                   placeholder="Search sessions…"
-                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#e5e5e5', fontSize: '14px' }}
+                  className="w-full bg-transparent border-0 outline-none text-neutral-200 text-sm"
                 />
               </div>
-              <div style={{ padding: '0 14px 10px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <div className="px-3.5 pb-2.5">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={skipPermissions}
                     onChange={e => setSkipPermissions(e.target.checked)}
-                    style={{ accentColor: '#4ade80', cursor: 'pointer' }}
+                    className="accent-green-400 cursor-pointer"
                   />
-                  <span style={{ color: '#777', fontSize: '11px' }}>--dangerously-skip-permissions</span>
+                  <span className="text-[#777] text-[11px]">--dangerously-skip-permissions</span>
                 </label>
               </div>
             </div>
 
-            <div style={{ overflowY: 'auto', flex: 1 }}>
+            <div className="overflow-y-auto flex-1">
               {filteredSessions.length > 0 && (
                 <>
                   <SectionLabel>Resume session</SectionLabel>
@@ -263,27 +254,24 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
                     <div
                       key={session.sessionId}
                       ref={el => { if (el) itemRefs.current.set(sessionOffset + i, el); else itemRefs.current.delete(sessionOffset + i) }}
-                      style={rowStyle(sessionOffset + i)}
+                      className={rowCls(sessionOffset + i)}
                       onClick={() => onResume(session, { skipPermissions, worktree: false })}
                       onMouseEnter={() => { setSelected(sessionOffset + i); setHoveredSession(session) }}
                       onMouseLeave={() => setHoveredSession(null)}
                     >
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                        <span style={{ color: '#d4d4d4', fontWeight: 500, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-neutral-300 font-medium text-[13px] overflow-hidden text-ellipsis whitespace-nowrap">
                           {session.title || session.slug || session.projectName}
                         </span>
-                        <span style={{ color: '#666', fontSize: '11px', marginLeft: 'auto', flexShrink: 0 }}>
+                        <span className="text-[#666] text-[11px] ml-auto shrink-0">
                           {relativeTime(session.lastActivity)}
                         </span>
                       </div>
-                      <div style={{ color: '#777', fontSize: '11px', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div className="text-[#777] text-[11px] mt-px overflow-hidden text-ellipsis whitespace-nowrap">
                         {session.projectName}{session.slug ? ` · ${session.cwd}` : ''}
                       </div>
                       {(session.latestPrompt || session.firstPrompt) && (
-                        <div style={{
-                          color: '#888', fontSize: '11px', lineHeight: '1.5', marginTop: '3px',
-                          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                        } as React.CSSProperties}>
+                        <div className="text-[#888] text-[11px] leading-[1.5] mt-[3px] line-clamp-2">
                           {session.latestPrompt || session.firstPrompt}
                         </div>
                       )}
@@ -292,39 +280,39 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
                 </>
               )}
               {filteredSessions.length === 0 && (
-                <div style={{ padding: '16px', color: '#555', fontSize: '12px' }}>
+                <div className="p-4 text-[#555] text-xs">
                   {query ? 'No matching sessions' : 'No recent sessions found'}
                 </div>
               )}
             </div>
 
-            <div style={{ flexShrink: 0, borderTop: '1px solid #272727' }}>
+            <div className="shrink-0 border-t border-app-550">
               <SectionLabel style={{ paddingTop: '6px', paddingBottom: '2px' }}>New session</SectionLabel>
               {recentFolders.map((cwd, i) => (
                 <div
                   key={cwd}
                   ref={el => { if (el) itemRefs.current.set(folderOffset + i, el); else itemRefs.current.delete(folderOffset + i) }}
-                  style={{ ...rowStyle(folderOffset + i), display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px' }}
+                  className={clsx(rowCls(folderOffset + i), 'flex items-center gap-2 !py-[5px]')}
                   onClick={() => goToOptions(cwd)}
                   onMouseEnter={() => { setSelected(folderOffset + i); setHoveredSession(null) }}
                 >
-                  <span style={{ color: '#4ade80', fontSize: '11px', flexShrink: 0 }}>+</span>
-                  <span style={{ color: '#d4d4d4', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                  <span className="text-green-400 text-[11px] shrink-0">+</span>
+                  <span className="text-neutral-300 text-xs overflow-hidden text-ellipsis whitespace-nowrap flex-1">
                     {cwd.split('/').pop()}
                   </span>
-                  <span style={{ color: '#555', fontSize: '10px', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>
-                    {cwd.split('/').slice(0, -1).join('/').replace('/Users/' + cwd.split('/')[2], '~')}
+                  <span className="text-[#555] text-[10px] shrink-0 overflow-hidden text-ellipsis whitespace-nowrap max-w-[120px]">
+                    {shortenParent(cwd)}
                   </span>
                 </div>
               ))}
               <div
                 ref={el => { if (el) itemRefs.current.set(browseOffset, el); else itemRefs.current.delete(browseOffset) }}
-                style={{ ...rowStyle(browseOffset), display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px', margin: '1px 4px 2px' }}
+                className={clsx(rowCls(browseOffset), 'flex items-center gap-2 !py-[5px] !mb-0.5')}
                 onClick={() => goToOptions()}
                 onMouseEnter={() => { setSelected(browseOffset); setHoveredSession(null) }}
               >
-                <span style={{ color: '#555', fontSize: '12px' }}>⊕</span>
-                <span style={{ color: '#888', fontSize: '12px' }}>Browse for folder…</span>
+                <span className="text-[#555] text-xs">⊕</span>
+                <span className="text-[#888] text-xs">Browse for folder…</span>
               </div>
 
               <SectionLabel style={{ paddingTop: '4px', paddingBottom: '2px' }}>New shell</SectionLabel>
@@ -332,70 +320,70 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
                 <div
                   key={cwd}
                   ref={el => { if (el) itemRefs.current.set(shellFolderOffset + i, el); else itemRefs.current.delete(shellFolderOffset + i) }}
-                  style={{ ...rowStyle(shellFolderOffset + i), display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px' }}
+                  className={clsx(rowCls(shellFolderOffset + i), 'flex items-center gap-2 !py-[5px]')}
                   onClick={() => onNewShell(cwd)}
                   onMouseEnter={() => { setSelected(shellFolderOffset + i); setHoveredSession(null) }}
                 >
-                  <span style={{ color: '#60a5fa', fontSize: '11px', flexShrink: 0, fontFamily: 'monospace' }}>$</span>
-                  <span style={{ color: '#d4d4d4', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                  <span className="text-blue-400 text-[11px] shrink-0 font-mono">$</span>
+                  <span className="text-neutral-300 text-xs overflow-hidden text-ellipsis whitespace-nowrap flex-1">
                     {cwd.split('/').pop()}
                   </span>
-                  <span style={{ color: '#555', fontSize: '10px', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>
-                    {cwd.split('/').slice(0, -1).join('/').replace('/Users/' + cwd.split('/')[2], '~')}
+                  <span className="text-[#555] text-[10px] shrink-0 overflow-hidden text-ellipsis whitespace-nowrap max-w-[120px]">
+                    {shortenParent(cwd)}
                   </span>
                 </div>
               ))}
               <div
                 ref={el => { if (el) itemRefs.current.set(shellBrowseOffset, el); else itemRefs.current.delete(shellBrowseOffset) }}
-                style={{ ...rowStyle(shellBrowseOffset), display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px', margin: '1px 4px 4px' }}
+                className={clsx(rowCls(shellBrowseOffset), 'flex items-center gap-2 !py-[5px] !mb-1')}
                 onClick={onShellBrowse}
                 onMouseEnter={() => { setSelected(shellBrowseOffset); setHoveredSession(null) }}
               >
-                <span style={{ color: '#60a5fa', fontSize: '11px', fontFamily: 'monospace' }}>$</span>
-                <span style={{ color: '#888', fontSize: '12px' }}>Shell in folder…</span>
+                <span className="text-blue-400 text-[11px] font-mono">$</span>
+                <span className="text-[#888] text-xs">Shell in folder…</span>
               </div>
             </div>
           </div>
         ) : (
           /* ── Step 2: New session options ── */
-          <div style={{ width: '360px', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ flexShrink: 0, borderBottom: '1px solid #272727', padding: '12px 14px' }}>
+          <div className="w-[360px] flex flex-col">
+            <div className="shrink-0 border-b border-app-550 px-3.5 py-3">
               <button
                 onClick={() => setStep('pick')}
-                style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '13px', padding: 0, display: 'flex', alignItems: 'center', gap: '6px' }}
+                className="bg-transparent border-0 text-[#888] cursor-pointer text-[13px] p-0 flex items-center gap-1.5"
               >
                 ← Back
               </button>
             </div>
 
-            <div style={{ flex: 1, padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div className="flex-1 px-4 py-5 flex flex-col gap-5">
               <div>
-                <div style={{ color: '#666', fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>New session in</div>
-                <div style={{ color: '#e5e5e5', fontSize: '13px', fontWeight: 500 }}>{pendingCwd?.split('/').pop()}</div>
-                <div style={{ color: '#555', fontSize: '11px', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pendingCwd}</div>
+                <div className="text-[#666] text-[10px] font-semibold uppercase tracking-[0.08em] mb-1.5">New session in</div>
+                <div className="text-neutral-200 text-[13px] font-medium">{pendingCwd?.split('/').pop()}</div>
+                <div className="text-[#555] text-[11px] mt-[3px] overflow-hidden text-ellipsis whitespace-nowrap">{pendingCwd}</div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <div className="flex flex-col gap-2.5">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={skipPermissions}
                     onChange={e => setSkipPermissions(e.target.checked)}
-                    style={{ accentColor: '#4ade80', cursor: 'pointer' }}
+                    className="accent-green-400 cursor-pointer"
                   />
-                  <span style={{ color: '#777', fontSize: '11px' }}>--dangerously-skip-permissions</span>
+                  <span className="text-[#777] text-[11px]">--dangerously-skip-permissions</span>
                 </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={worktree}
                     onChange={e => setWorktree(e.target.checked)}
-                    style={{ accentColor: '#60a5fa', cursor: 'pointer' }}
+                    className="accent-blue-400 cursor-pointer"
                   />
-                  <span style={{ color: '#777', fontSize: '11px' }}>--worktree</span>
+                  <span className="text-[#777] text-[11px]">--worktree</span>
                 </label>
                 {worktree && (
-                  <div style={{ position: 'relative', marginLeft: '20px' }}>
+                  <div className="relative ml-5">
                     <input
                       ref={branchInputRef}
                       value={branchSearch}
@@ -403,32 +391,24 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
                       onFocus={() => setBranchOpen(true)}
                       onBlur={() => setTimeout(() => setBranchOpen(false), 150)}
                       placeholder="Branch (optional)…"
-                      style={{
-                        width: '100%', boxSizing: 'border-box',
-                        background: '#252525', border: '1px solid #3a3a3a', borderRadius: '5px',
-                        color: branch ? '#e5e5e5' : '#aaa', fontSize: '12px',
-                        padding: '5px 8px', outline: 'none',
-                      }}
+                      className={clsx(
+                        'w-full box-border bg-app-600 border border-app-350 rounded text-xs px-2 py-[5px] outline-none',
+                        branch ? 'text-neutral-200' : 'text-[#aaa]'
+                      )}
                     />
                     {branchOpen && filteredBranches.length > 0 && (
                       <div
                         ref={branchListRef}
-                        style={{
-                          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 10,
-                          background: '#252525', border: '1px solid #3a3a3a', borderRadius: '5px',
-                          maxHeight: '140px', overflowY: 'auto',
-                          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                        }}
+                        className="absolute top-[calc(100%+4px)] left-0 right-0 z-10 bg-app-600 border border-app-350 rounded max-h-[140px] overflow-y-auto shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
                       >
                         {filteredBranches.map((b, i) => (
                           <div
                             key={b}
                             onMouseDown={e => { e.preventDefault(); setBranch(b); setBranchSearch(b); setBranchOpen(false) }}
-                            style={{
-                              padding: '5px 8px', fontSize: '12px', cursor: 'pointer',
-                              color: i === branchIdx ? '#e5e5e5' : '#aaa',
-                              background: i === branchIdx ? 'rgba(255,255,255,0.07)' : 'transparent',
-                            }}
+                            className={clsx(
+                              'px-2 py-[5px] text-xs cursor-pointer',
+                              i === branchIdx ? 'bg-white/[0.07] text-neutral-200' : 'bg-transparent text-[#aaa]'
+                            )}
                           >
                             {b}
                           </div>
@@ -440,14 +420,10 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
               </div>
             </div>
 
-            <div style={{ flexShrink: 0, borderTop: '1px solid #272727', padding: '12px 16px' }}>
+            <div className="shrink-0 border-t border-app-550 px-4 py-3">
               <button
                 onClick={handleStart}
-                style={{
-                  width: '100%', padding: '8px 16px',
-                  background: '#1d4ed8', border: 'none', borderRadius: '6px',
-                  color: '#e5e5e5', fontSize: '13px', fontWeight: 500, cursor: 'pointer',
-                }}
+                className="w-full py-2 px-4 bg-blue-700 border-0 rounded-md text-neutral-200 text-[13px] font-medium cursor-pointer"
               >
                 Start session
               </button>
@@ -456,59 +432,53 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
         )}
 
         {/* Right panel */}
-        <div style={{ width: '280px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto', borderLeft: '1px solid #272727' }}>
+        <div className="w-[280px] p-4 flex flex-col gap-3 overflow-y-auto border-l border-app-550">
           {step === 'pick' ? (
             <>
               {!activeSession && (
-                <div style={{ color: '#444', fontSize: '12px', marginTop: '8px' }}>Select a session to see details</div>
+                <div className="text-[#444] text-xs mt-2">Select a session to see details</div>
               )}
               {activeSession && (<>
                 <div>
-                  <div style={{ color: '#e5e5e5', fontWeight: 600, fontSize: '13px', marginBottom: '2px' }}>
+                  <div className="text-neutral-200 font-semibold text-[13px] mb-0.5">
                     {activeSession.title || activeSession.slug || activeSession.projectName}
                   </div>
                   {activeSession.slug && (
-                    <div style={{ color: '#888', fontSize: '11px' }}>{activeSession.projectName}</div>
+                    <div className="text-[#888] text-[11px]">{activeSession.projectName}</div>
                   )}
                 </div>
                 {(summaries[activeSession.sessionId] || activeSession.summary) && (
-                  <div style={{ color: '#777', fontSize: '11px', lineHeight: '1.6', fontStyle: 'italic' }}>
+                  <div className="text-[#777] text-[11px] leading-relaxed italic">
                     {summaries[activeSession.sessionId] || activeSession.summary}
                   </div>
                 )}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div className="flex flex-col gap-1">
                   <DetailLabel>Location</DetailLabel>
-                  <div style={{ color: '#999', fontSize: '11px', wordBreak: 'break-all' }}>{activeSession.cwd}</div>
+                  <div className="text-[#999] text-[11px] break-all">{activeSession.cwd}</div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div className="flex flex-col gap-1">
                   <DetailLabel>Last active</DetailLabel>
-                  <div style={{ color: '#999', fontSize: '11px' }}>{relativeTime(activeSession.lastActivity)}</div>
+                  <div className="text-[#999] text-[11px]">{relativeTime(activeSession.lastActivity)}</div>
                 </div>
                 {activeSession.latestPrompt && activeSession.latestPrompt !== activeSession.firstPrompt && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div className="flex flex-col gap-1">
                     <DetailLabel>Last prompt</DetailLabel>
-                    <div style={{
-                      color: '#aaa', fontSize: '11px', lineHeight: '1.6',
-                      display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                    } as React.CSSProperties}>
+                    <div className="text-[#aaa] text-[11px] leading-relaxed line-clamp-5">
                       {activeSession.latestPrompt}
                     </div>
                   </div>
                 )}
                 {activeSession.firstPrompt && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div className="flex flex-col gap-1">
                     <DetailLabel>First prompt</DetailLabel>
-                    <div style={{
-                      color: '#666', fontSize: '11px', lineHeight: '1.6',
-                      display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                    } as React.CSSProperties}>
+                    <div className="text-[#666] text-[11px] leading-relaxed line-clamp-5">
                       {activeSession.firstPrompt}
                     </div>
                   </div>
                 )}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div className="flex flex-col gap-1">
                   <DetailLabel>Session ID</DetailLabel>
-                  <div style={{ color: '#555', fontSize: '10px', wordBreak: 'break-all' }}>
+                  <div className="text-[#555] text-[10px] break-all">
                     {activeSession.sessionId}
                   </div>
                 </div>
@@ -517,9 +487,9 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
           ) : (
             <>
               <DetailLabel>--worktree</DetailLabel>
-              <div style={{ color: '#666', fontSize: '11px', lineHeight: '1.7' }}>
+              <div className="text-[#666] text-[11px] leading-[1.7]">
                 {worktree && branch
-                  ? <>Checks out <span style={{ color: '#aaa' }}>{branch}</span> in an isolated worktree at <span style={{ color: '#aaa' }}>.claude/worktrees/{branch.replace(/\//g, '-')}</span>.</>
+                  ? <>Checks out <span className="text-[#aaa]">{branch}</span> in an isolated worktree at <span className="text-[#aaa]">.claude/worktrees/{branch.replace(/\//g, '-')}</span>.</>
                   : 'Runs Claude in an isolated git worktree. Pick a branch to check it out there, or leave blank for an auto-named branch.'
                 }
               </div>
@@ -533,15 +503,10 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
 
 function SectionLabel({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <div style={{
-      padding: '8px 16px 3px',
-      fontSize: '10px',
-      color: '#666',
-      fontWeight: 600,
-      textTransform: 'uppercase',
-      letterSpacing: '0.08em',
-      ...style,
-    }}>
+    <div
+      className="px-4 pt-2 pb-[3px] text-[10px] text-[#666] font-semibold uppercase tracking-[0.08em]"
+      style={style}
+    >
       {children}
     </div>
   )
@@ -549,7 +514,7 @@ function SectionLabel({ children, style }: { children: React.ReactNode; style?: 
 
 function DetailLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: '10px', color: '#666', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+    <div className="text-[10px] text-[#666] font-semibold uppercase tracking-[0.08em]">
       {children}
     </div>
   )

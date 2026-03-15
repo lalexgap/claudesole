@@ -315,7 +315,7 @@ export default function App() {
   }, [sessions, setAiTitle])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
+    <div className="flex flex-col w-full h-full">
       <TabBar
         sessions={tabSessions}
         allSessions={sessions}
@@ -340,7 +340,7 @@ export default function App() {
         onToggleSettings={toggleSettings}
       />
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div className="flex flex-1 overflow-hidden">
         {showSidebar && (
           <SessionSidebar
             sessions={sessions.filter(s => s.type === 'claude')}
@@ -352,13 +352,9 @@ export default function App() {
           />
         )}
 
-        <div ref={contentRef} style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
+        <div ref={contentRef} className="relative flex-1 overflow-hidden">
           {sessions.length === 0 && !showHistory && (
-            <div style={{
-              position: 'absolute', inset: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#333', fontSize: '14px',
-            }}>
+            <div className="absolute inset-0 flex items-center justify-center text-[#333] text-sm">
               Press ⌘T or click + to open a session
             </div>
           )}

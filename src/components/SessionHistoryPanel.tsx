@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
+import clsx from 'clsx'
 import { ClaudeSession } from '../types/ipc'
 import { ContextBar } from './ContextBar'
 
@@ -136,20 +137,10 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
   ]
 
   return (
-    <div style={{
-      position: 'absolute', inset: 0,
-      background: '#111',
-      display: 'flex', flexDirection: 'column',
-      zIndex: 50,
-    }}>
+    <div className="absolute inset-0 bg-app-900 flex flex-col z-50">
       {/* Header */}
-      <div style={{
-        flexShrink: 0,
-        display: 'flex', alignItems: 'center', gap: '12px',
-        padding: '10px 16px',
-        borderBottom: '1px solid #1e1e1e',
-      }}>
-        <span style={{ color: '#555', fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>
+      <div className="shrink-0 flex items-center gap-3 px-4 py-2.5 border-b border-app-700">
+        <span className="text-[#555] text-xs font-semibold uppercase tracking-[0.08em] shrink-0">
           History
         </span>
         <input
@@ -157,53 +148,37 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="Search sessions…"
-          style={{
-            flex: 1, background: 'rgba(255,255,255,0.05)',
-            border: '1px solid #2a2a2a', borderRadius: '6px',
-            padding: '5px 10px', color: '#e5e5e5', fontSize: '13px', outline: 'none',
-          }}
+          className="flex-1 bg-white/[0.05] border border-app-500 rounded-md px-2.5 py-[5px] text-neutral-200 text-[13px] outline-none"
         />
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', flexShrink: 0 }}>
+        <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
           <input
             type="checkbox"
             checked={skipPermissions}
             onChange={e => setSkipPermissions(e.target.checked)}
-            style={{ accentColor: '#4ade80', cursor: 'pointer' }}
+            className="accent-green-400 cursor-pointer"
           />
-          <span style={{ color: '#666', fontSize: '11px', whiteSpace: 'nowrap' }}>--dangerously-skip-permissions</span>
+          <span className="text-[#666] text-[11px] whitespace-nowrap">--dangerously-skip-permissions</span>
         </label>
         <button
           onClick={onClose}
-          style={{
-            background: 'none', border: 'none', color: '#555',
-            fontSize: '18px', cursor: 'pointer', lineHeight: 1, flexShrink: 0,
-          }}
+          className="bg-transparent border-0 text-[#555] text-lg cursor-pointer leading-none shrink-0"
         >
           ×
         </button>
       </div>
 
       {/* Body */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div className="flex flex-1 overflow-hidden">
         {/* Session list */}
-        <div style={{
-          width: '340px', flexShrink: 0,
-          borderRight: '1px solid #1a1a1a',
-          overflowY: 'auto',
-          padding: '8px 0',
-        }}>
+        <div className="w-[340px] shrink-0 border-r border-app-800 overflow-y-auto py-2">
           {groups.length === 0 && (
-            <div style={{ padding: '24px 16px', color: '#444', fontSize: '13px' }}>
+            <div className="px-4 py-6 text-[#444] text-[13px]">
               {query ? 'No matching sessions' : 'No sessions found'}
             </div>
           )}
           {groups.map(group => (
             <div key={group.label}>
-              <div style={{
-                padding: '8px 16px 4px',
-                fontSize: '10px', color: '#444',
-                fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em',
-              }}>
+              <div className="px-4 pt-2 pb-1 text-[10px] text-[#444] font-semibold uppercase tracking-[0.08em]">
                 {group.label}
               </div>
               {group.sessions.map(session => {
@@ -217,33 +192,25 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
                     onDoubleClick={() => { onResume(session, skipPermissions) }}
                     onMouseEnter={() => setHoveredRow(session.sessionId)}
                     onMouseLeave={() => setHoveredRow(null)}
-                    style={{
-                      padding: '7px 16px',
-                      cursor: 'pointer',
-                      background: isSelected ? 'rgba(255,255,255,0.07)' : 'transparent',
-                      borderLeft: `2px solid ${isSelected ? '#555' : 'transparent'}`,
-                      display: 'flex', alignItems: 'flex-start', gap: '6px',
-                    }}
+                    className={clsx(
+                      'px-4 py-[7px] cursor-pointer border-l-2 flex items-start gap-1.5',
+                      isSelected ? 'bg-white/[0.07] border-[#555]' : 'bg-transparent border-transparent'
+                    )}
                   >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                        <span style={{
-                          color: isSelected ? '#e5e5e5' : '#bbb',
-                          fontSize: '13px', fontWeight: 500,
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          flex: 1,
-                        }}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-1.5">
+                        <span className={clsx(
+                          'text-[13px] font-medium overflow-hidden text-ellipsis whitespace-nowrap flex-1',
+                          isSelected ? 'text-neutral-200' : 'text-[#bbb]'
+                        )}>
                           {session.title || session.slug || session.projectName}
                         </span>
-                        <span style={{ color: '#555', fontSize: '11px', flexShrink: 0 }}>
+                        <span className="text-[#555] text-[11px] shrink-0">
                           {relativeTime(session.lastActivity)}
                         </span>
                       </div>
                       {(session.latestPrompt || session.firstPrompt) && (
-                        <div style={{
-                          color: '#666', fontSize: '11px', marginTop: '2px',
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        }}>
+                        <div className="text-[#666] text-[11px] mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap">
                           {session.latestPrompt || session.firstPrompt}
                         </div>
                       )}
@@ -252,12 +219,10 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
                       <span
                         onClick={(e) => toggleFavorite(session.sessionId, e)}
                         title={isFav ? 'Remove from favorites' : 'Add to favorites'}
-                        style={{
-                          fontSize: '16px', flexShrink: 0, marginTop: '1px',
-                          color: isFav ? '#f6c90e' : '#444',
-                          cursor: 'pointer', lineHeight: 1,
-                          transition: 'color 0.15s',
-                        }}
+                        className={clsx(
+                          'text-base shrink-0 mt-px cursor-pointer leading-none transition-colors duration-150',
+                          isFav ? 'text-gold' : 'text-[#444]'
+                        )}
                       >
                         ★
                       </span>
@@ -271,66 +236,59 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
 
         {/* Detail panel */}
         {selected ? (
-          <div style={{
-            flex: 1, padding: '24px 28px',
-            overflowY: 'auto',
-            display: 'flex', flexDirection: 'column', gap: '20px',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ color: '#e5e5e5', fontSize: '18px', fontWeight: 600, marginBottom: '4px' }}>
+          <div className="flex-1 px-7 py-6 overflow-y-auto flex flex-col gap-5">
+            <div className="flex items-start gap-2.5">
+              <div className="flex-1">
+                <div className="text-neutral-200 text-lg font-semibold mb-1">
                   {selected.title || selected.slug || selected.projectName}
                 </div>
                 {selected.slug && (
-                  <div style={{ color: '#666', fontSize: '13px' }}>{selected.projectName}</div>
+                  <div className="text-[#666] text-[13px]">{selected.projectName}</div>
                 )}
               </div>
               <span
                 onClick={(e) => toggleFavorite(selected.sessionId, e)}
                 title={favorites.has(selected.sessionId) ? 'Remove from favorites' : 'Add to favorites'}
-                style={{
-                  fontSize: '18px', cursor: 'pointer', lineHeight: 1, marginTop: '2px', flexShrink: 0,
-                  color: favorites.has(selected.sessionId) ? '#f6c90e' : '#333',
-                  transition: 'color 0.15s',
-                }}
+                className={clsx(
+                  'text-lg cursor-pointer leading-none mt-0.5 shrink-0 transition-colors duration-150',
+                  favorites.has(selected.sessionId) ? 'text-gold' : 'text-[#333]'
+                )}
               >
                 ★
               </span>
             </div>
 
             {summary && (
-              <div style={{ color: '#888', fontSize: '12px', lineHeight: '1.6', fontStyle: 'italic' }}>
+              <div className="text-[#888] text-xs leading-relaxed italic">
                 {summary}
               </div>
             )}
             {!summary && selected.firstPrompt && (
-              <div style={{ color: '#444', fontSize: '11px', fontStyle: 'italic' }}>Generating summary…</div>
+              <div className="text-[#444] text-[11px] italic">Generating summary…</div>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div className="flex flex-col gap-1.5">
               <Label>Location</Label>
-              <div style={{ color: '#888', fontSize: '12px', wordBreak: 'break-all' }}>{selected.cwd}</div>
+              <div className="text-[#888] text-xs break-all">{selected.cwd}</div>
               {gitInfo?.branch && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-                  <span style={{ color: '#555', fontSize: '11px' }}>⎇</span>
-                  <span style={{ color: '#888', fontSize: '11px' }}>{gitInfo.branch}</span>
-                  <span style={{
-                    fontSize: '9px',
-                    color: gitInfo.isWorktree ? '#60a5fa' : '#555',
-                    background: gitInfo.isWorktree ? 'rgba(96,165,250,0.12)' : 'rgba(255,255,255,0.05)',
-                    border: `1px solid ${gitInfo.isWorktree ? 'rgba(96,165,250,0.3)' : '#2a2a2a'}`,
-                    borderRadius: '3px', padding: '1px 5px',
-                    textTransform: 'uppercase', letterSpacing: '0.05em',
-                  }}>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="text-[#555] text-[11px]">⎇</span>
+                  <span className="text-[#888] text-[11px]">{gitInfo.branch}</span>
+                  <span className={clsx(
+                    'text-[9px] border rounded-sm px-[5px] py-px uppercase tracking-[0.05em]',
+                    gitInfo.isWorktree
+                      ? 'text-blue-400 bg-blue-400/[0.12] border-blue-400/30'
+                      : 'text-[#555] bg-white/[0.05] border-app-500'
+                  )}>
                     {gitInfo.isWorktree ? 'worktree' : 'main'}
                   </span>
                 </div>
               )}
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div className="flex flex-col gap-1.5">
               <Label>Last active</Label>
-              <div style={{ color: '#888', fontSize: '12px' }}>{relativeTime(selected.lastActivity)}</div>
+              <div className="text-[#888] text-xs">{relativeTime(selected.lastActivity)}</div>
             </div>
 
             {selected.tokensUsed !== undefined && (
@@ -338,32 +296,29 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
             )}
 
             {selected.firstPrompt && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div className="flex flex-col gap-1.5">
                 <Label>First prompt</Label>
                 <PromptBox text={selected.firstPrompt} />
               </div>
             )}
 
             {selected.latestPrompt && selected.latestPrompt !== selected.firstPrompt && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div className="flex flex-col gap-1.5">
                 <Label>Latest prompt</Label>
                 <PromptBox text={selected.latestPrompt} dim />
               </div>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div className="flex flex-col gap-1.5">
               <Label>Session ID</Label>
-              <div style={{ color: '#444', fontSize: '11px', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+              <div className="text-[#444] text-[11px] font-mono break-all">
                 {selected.sessionId}
               </div>
             </div>
 
             {/* Actions */}
-            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-              <ActionButton
-                onClick={() => onResume(selected, skipPermissions)}
-                primary
-              >
+            <div className="flex gap-2 mt-1">
+              <ActionButton onClick={() => onResume(selected, skipPermissions)} primary>
                 Resume in new tab
               </ActionButton>
               <ActionButton
@@ -375,10 +330,7 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
             </div>
           </div>
         ) : (
-          <div style={{
-            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#333', fontSize: '13px',
-          }}>
+          <div className="flex-1 flex items-center justify-center text-[#333] text-[13px]">
             Select a session to view details
           </div>
         )}
@@ -389,14 +341,10 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
 
 function PromptBox({ text, dim }: { text: string; dim?: boolean }) {
   return (
-    <div style={{
-      color: dim ? '#888' : '#aaa', fontSize: '12px', lineHeight: 1.7,
-      background: 'rgba(255,255,255,0.03)',
-      border: '1px solid #1e1e1e',
-      borderRadius: '6px', padding: '10px 12px',
-      whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-      maxHeight: '200px', overflowY: 'auto',
-    }}>
+    <div className={clsx(
+      'text-xs leading-[1.7] bg-white/[0.03] border border-app-700 rounded-md px-3 py-2.5 whitespace-pre-wrap break-words max-h-[200px] overflow-y-auto',
+      dim ? 'text-[#888]' : 'text-[#aaa]'
+    )}>
       {text}
     </div>
   )
@@ -404,7 +352,7 @@ function PromptBox({ text, dim }: { text: string; dim?: boolean }) {
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: '10px', color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+    <div className="text-[10px] text-[#555] font-semibold uppercase tracking-[0.08em]">
       {children}
     </div>
   )
@@ -423,19 +371,12 @@ function ActionButton({ children, onClick, primary, title }: {
       title={title}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
-      style={{
-        padding: '7px 16px',
-        borderRadius: '6px',
-        border: primary ? 'none' : '1px solid #2a2a2a',
-        background: primary
-          ? (hov ? 'rgba(74,222,128,0.25)' : 'rgba(74,222,128,0.15)')
-          : (hov ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)'),
-        color: primary ? '#4ade80' : '#888',
-        fontSize: '12px',
-        cursor: 'pointer',
-        fontFamily: 'inherit',
-        transition: 'background 0.15s',
-      }}
+      className={clsx(
+        'px-4 py-[7px] rounded-md text-xs cursor-pointer font-[inherit] transition-colors duration-150',
+        primary
+          ? clsx('border-0', hov ? 'bg-green-400/[0.25] text-green-400' : 'bg-green-400/[0.15] text-green-400')
+          : clsx('border border-app-500', hov ? 'bg-white/[0.08] text-[#888]' : 'bg-white/[0.04] text-[#888]')
+      )}
     >
       {children}
     </button>

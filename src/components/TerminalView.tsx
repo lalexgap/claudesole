@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback } from 'react'
+import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { useTerminal, TerminalHandle } from '../hooks/useTerminal'
 
 interface TerminalViewProps {
@@ -58,57 +58,35 @@ export function TerminalView({ sessionId, isActive, isShell, onCmdK }: TerminalV
   }
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', padding: '8px', boxSizing: 'border-box' }}>
-      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+    <div className="relative w-full h-full p-2 box-border">
+      <div ref={containerRef} className="w-full h-full" />
 
       {showSearch && (
-        <div style={{
-          position: 'absolute',
-          top: '16px',
-          right: '24px',
-          background: '#222',
-          border: '1px solid #3a3a3a',
-          borderRadius: '6px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px',
-          padding: '4px 8px',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-          zIndex: 10,
-        }}>
+        <div className="absolute top-4 right-6 bg-app-750 border border-app-350 rounded-md flex items-center gap-1 px-2 py-1 shadow-[0_4px_16px_rgba(0,0,0,0.5)] z-10">
           <input
             ref={searchInputRef}
             value={searchQuery}
             onChange={e => handleSearchChange(e.target.value)}
             onKeyDown={handleSearchKey}
             placeholder="Find…"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              outline: 'none',
-              color: '#e5e5e5',
-              fontSize: '13px',
-              width: '180px',
-            }}
+            className="bg-transparent border-0 outline-none text-neutral-200 text-[13px] w-[180px]"
           />
-          <button onClick={() => handleRef.current?.findPrevious(searchQuery)}
-            style={btnStyle} title="Previous (⇧↵)">↑</button>
-          <button onClick={() => handleRef.current?.findNext(searchQuery)}
-            style={btnStyle} title="Next (↵)">↓</button>
-          <button onClick={closeSearch}
-            style={{ ...btnStyle, marginLeft: '2px', color: '#666' }}>×</button>
+          <button
+            onClick={() => handleRef.current?.findPrevious(searchQuery)}
+            className="bg-transparent border-0 text-[#888] cursor-pointer text-[13px] px-[3px] leading-none"
+            title="Previous (⇧↵)"
+          >↑</button>
+          <button
+            onClick={() => handleRef.current?.findNext(searchQuery)}
+            className="bg-transparent border-0 text-[#888] cursor-pointer text-[13px] px-[3px] leading-none"
+            title="Next (↵)"
+          >↓</button>
+          <button
+            onClick={closeSearch}
+            className="bg-transparent border-0 text-[#666] cursor-pointer text-[13px] px-[3px] leading-none ml-0.5"
+          >×</button>
         </div>
       )}
     </div>
   )
-}
-
-const btnStyle: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  color: '#888',
-  cursor: 'pointer',
-  fontSize: '13px',
-  padding: '0 3px',
-  lineHeight: 1,
 }

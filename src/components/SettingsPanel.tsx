@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
+import clsx from 'clsx'
 import { AppSettings } from '../types/ipc'
 
 interface Props {
@@ -45,43 +46,36 @@ export function SettingsPanel({ onClose }: Props) {
     ? 'e.g. moonshot-v1-8k'
     : 'e.g. claude-haiku-4-5-20251001'
 
+  const inputCls = 'w-full box-border bg-white/[0.05] border border-app-500 rounded-md px-2.5 py-1.5 text-neutral-200 text-xs outline-none'
+
   return (
-    <div style={{
-      position: 'absolute', inset: 0,
-      background: '#111',
-      display: 'flex', flexDirection: 'column',
-      zIndex: 50,
-    }}>
+    <div className="absolute inset-0 bg-app-900 flex flex-col z-50">
       {/* Header */}
-      <div style={{
-        flexShrink: 0,
-        display: 'flex', alignItems: 'center', gap: '12px',
-        padding: '10px 16px',
-        borderBottom: '1px solid #1e1e1e',
-      }}>
-        <span style={{ color: '#555', fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', flex: 1 }}>
+      <div className="shrink-0 flex items-center gap-3 px-4 py-2.5 border-b border-app-700">
+        <span className="text-[#555] text-xs font-semibold uppercase tracking-[0.08em] flex-1">
           Settings
         </span>
         <button
           onClick={onClose}
-          style={{ background: 'none', border: 'none', color: '#555', fontSize: '18px', cursor: 'pointer', lineHeight: 1 }}
+          className="bg-transparent border-0 text-[#555] text-lg cursor-pointer leading-none"
         >
           ×
         </button>
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '32px', maxWidth: '520px' }}>
+      <div className="flex-1 overflow-y-auto px-8 py-8 max-w-[520px]">
         <SectionHeading>AI Session Titles</SectionHeading>
-        <p style={{ color: '#555', fontSize: '12px', marginBottom: '24px', lineHeight: 1.6 }}>
-          Automatically generate short titles for sessions using an AI API. Titles are cached locally in <code style={{ color: '#666' }}>~/.claude/claudesole-titles.json</code>.
+        <p className="text-[#555] text-xs mb-6 leading-relaxed">
+          Automatically generate short titles for sessions using an AI API. Titles are cached locally in{' '}
+          <code className="text-[#666]">~/.claude/claudesole-titles.json</code>.
         </p>
 
         <FormRow label="Title Provider">
           <select
             value={settings.titleProvider}
             onChange={e => setSettings(s => ({ ...s, titleProvider: e.target.value as AppSettings['titleProvider'] }))}
-            style={selectStyle}
+            className={clsx(inputCls, 'cursor-pointer')}
           >
             <option value="none">None</option>
             <option value="anthropic">Anthropic</option>
@@ -97,7 +91,7 @@ export function SettingsPanel({ onClose }: Props) {
                 value={settings.apiKey}
                 onChange={e => setSettings(s => ({ ...s, apiKey: e.target.value }))}
                 placeholder="Paste your API key…"
-                style={inputStyle}
+                className={inputCls}
               />
             </FormRow>
 
@@ -107,7 +101,7 @@ export function SettingsPanel({ onClose }: Props) {
                 value={settings.model}
                 onChange={e => setSettings(s => ({ ...s, model: e.target.value }))}
                 placeholder={modelPlaceholder}
-                style={inputStyle}
+                className={inputCls}
               />
             </FormRow>
 
@@ -118,52 +112,43 @@ export function SettingsPanel({ onClose }: Props) {
                   value={settings.baseUrl}
                   onChange={e => setSettings(s => ({ ...s, baseUrl: e.target.value }))}
                   placeholder="e.g. https://api.moonshot.cn/v1"
-                  style={inputStyle}
+                  className={inputCls}
                 />
               </FormRow>
             )}
           </>
         )}
 
-        <div style={{ marginTop: '32px' }}>
+        <div className="mt-8">
           <button
             onClick={handleSave}
-            style={{
-              padding: '8px 20px',
-              background: saved ? 'rgba(74,222,128,0.15)' : '#1d4ed8',
-              border: saved ? '1px solid rgba(74,222,128,0.3)' : 'none',
-              borderRadius: '6px',
-              color: saved ? '#4ade80' : '#e5e5e5',
-              fontSize: '13px', fontWeight: 500, cursor: 'pointer',
-              transition: 'background 0.2s, color 0.2s',
-            }}
+            className={clsx(
+              'px-5 py-2 rounded-md text-[13px] font-medium cursor-pointer border transition-[background,color] duration-200',
+              saved
+                ? 'bg-green-400/[0.15] border-green-400/30 text-green-400'
+                : 'bg-blue-700 border-transparent text-neutral-200'
+            )}
           >
             {saved ? 'Saved!' : 'Save'}
           </button>
         </div>
 
-        <div style={{ marginTop: '40px' }}>
+        <div className="mt-10">
           <SectionHeading>Logs</SectionHeading>
-          <div ref={logsContainerRef} style={{
-            marginTop: '8px',
-            background: '#0a0a0a',
-            border: '1px solid #1e1e1e',
-            borderRadius: '6px',
-            padding: '10px 12px',
-            height: '260px',
-            overflowY: 'auto',
-            fontFamily: 'monospace',
-            fontSize: '11px',
-          }}>
-            {logs.length === 0 && <span style={{ color: '#333' }}>No logs yet.</span>}
+          <div
+            ref={logsContainerRef}
+            className="mt-2 bg-app-950 border border-app-700 rounded-md px-3 py-2.5 h-[260px] overflow-y-auto font-mono text-[11px]"
+          >
+            {logs.length === 0 && <span className="text-[#333]">No logs yet.</span>}
             {logs.map((entry, i) => (
-              <div key={i} style={{
-                color: entry.level === 'error' ? '#f87171' : entry.level === 'warn' ? '#fbbf24' : '#666',
-                marginBottom: '2px',
-                wordBreak: 'break-all',
-                whiteSpace: 'pre-wrap',
-              }}>
-                <span style={{ color: '#333', marginRight: '6px' }}>
+              <div
+                key={i}
+                className={clsx(
+                  'mb-0.5 break-all whitespace-pre-wrap',
+                  entry.level === 'error' ? 'text-red-400' : entry.level === 'warn' ? 'text-amber-400' : 'text-[#666]'
+                )}
+              >
+                <span className="text-[#333] mr-1.5">
                   {new Date(entry.ts).toLocaleTimeString()}
                 </span>
                 {entry.msg}
@@ -178,7 +163,7 @@ export function SettingsPanel({ onClose }: Props) {
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: '13px', fontWeight: 600, color: '#bbb', marginBottom: '8px' }}>
+    <div className="text-[13px] font-semibold text-[#bbb] mb-2">
       {children}
     </div>
   )
@@ -186,27 +171,11 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 
 function FormRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '14px' }}>
-      <label style={{ fontSize: '12px', color: '#666', width: '100px', flexShrink: 0, textAlign: 'right' }}>
+    <div className="flex items-center gap-4 mb-3.5">
+      <label className="text-xs text-[#666] w-[100px] shrink-0 text-right">
         {label}
       </label>
-      <div style={{ flex: 1 }}>{children}</div>
+      <div className="flex-1">{children}</div>
     </div>
   )
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', boxSizing: 'border-box',
-  background: 'rgba(255,255,255,0.05)',
-  border: '1px solid #2a2a2a',
-  borderRadius: '6px',
-  padding: '6px 10px',
-  color: '#e5e5e5',
-  fontSize: '12px',
-  outline: 'none',
-}
-
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  cursor: 'pointer',
 }
