@@ -93,4 +93,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   saveSettings: (s: unknown) => ipcRenderer.invoke('settings:save', s),
 
+  embeddingsAvailable: (): Promise<boolean> =>
+    ipcRenderer.invoke('embeddings:available'),
+
+  ensureEmbeddings: (sessions: unknown[]): Promise<{ total: number; indexed: number }> =>
+    ipcRenderer.invoke('embeddings:ensure', sessions),
+
+  semanticSearch: (query: string, sessions: unknown[], topK?: number): Promise<Array<{ session: unknown; score: number }>> =>
+    ipcRenderer.invoke('embeddings:search', { query, sessions, topK }),
+
 })
