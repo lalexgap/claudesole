@@ -79,14 +79,15 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
           .then(title => {
             if (title) setSessions(prev => prev.map(p => p.sessionId === s.sessionId ? { ...p, title } : p))
           })
+          .catch(() => {})
       }
-    })
+    }).catch(() => {})
   }, [])
 
   useEffect(() => {
     setGitInfo(null)
     if (!selected?.cwd) return
-    window.electronAPI.getGitInfo(selected.cwd).then(setGitInfo)
+    window.electronAPI.getGitInfo(selected.cwd).then(setGitInfo).catch(() => {})
   }, [selected?.sessionId])
 
   useEffect(() => {
@@ -95,6 +96,7 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
     if (selected.summary) return
     window.electronAPI.generateSessionSummary(selected.sessionId, selected.firstPrompt, selected.latestPrompt || undefined)
       .then(s => { if (s) { setSummary(s); setSessions(prev => prev.map(p => p.sessionId === selected.sessionId ? { ...p, summary: s } : p)) } })
+      .catch(() => {})
   }, [selected?.sessionId])
 
   useEffect(() => {

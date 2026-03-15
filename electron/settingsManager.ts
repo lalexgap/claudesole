@@ -27,5 +27,6 @@ export function getSettings(): AppSettings {
 }
 
 export function saveSettings(s: AppSettings): void {
+  fs.mkdirSync(path.dirname(SETTINGS_PATH), { recursive: true })
   fs.writeFileSync(SETTINGS_PATH, JSON.stringify(s, null, 2))
 }
