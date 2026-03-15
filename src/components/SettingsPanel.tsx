@@ -14,7 +14,7 @@ export function SettingsPanel({ onClose }: Props) {
   })
   const [saved, setSaved] = useState(false)
   const [logs, setLogs] = useState<{ level: string; msg: string; ts: number }[]>([])
-  const logsEndRef = useRef<HTMLDivElement>(null)
+  const logsContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     window.electronAPI.getSettings().then(setSettings)
@@ -23,7 +23,8 @@ export function SettingsPanel({ onClose }: Props) {
   }, [])
 
   useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = logsContainerRef.current
+    if (el) el.scrollTop = el.scrollHeight
   }, [logs])
 
   useEffect(() => {
@@ -143,7 +144,7 @@ export function SettingsPanel({ onClose }: Props) {
 
         <div style={{ marginTop: '40px' }}>
           <SectionHeading>Logs</SectionHeading>
-          <div style={{
+          <div ref={logsContainerRef} style={{
             marginTop: '8px',
             background: '#0a0a0a',
             border: '1px solid #1e1e1e',
@@ -168,7 +169,6 @@ export function SettingsPanel({ onClose }: Props) {
                 {entry.msg}
               </div>
             ))}
-            <div ref={logsEndRef} />
           </div>
         </div>
       </div>
