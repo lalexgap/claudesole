@@ -54,6 +54,13 @@ export function getCachedSummary(sessionId: string): string | undefined {
   return loadCache()[`${sessionId}:summary`]?.title
 }
 
+export function clearTitleCache(sessionId: string): void {
+  loadCache()
+  delete memCache[sessionId]
+  delete memCache[`${sessionId}:summary`]
+  saveCache()
+}
+
 const inFlight = new Set<string>()
 
 export async function generateSummary(
@@ -70,7 +77,7 @@ export async function generateSummary(
     const apiKey = resolveApiKey(settings.apiKey)
     if (!apiKey) return null
 
-    const prompt = `The following are the user's messages throughout a conversation with an AI assistant:\n\n${context}\n\nWrite a 2-3 sentence summary of what was worked on across this whole conversation. Be concise and factual. Reply with only the summary.`
+    const prompt = `The following are the user's messages throughout a Claude Code session (an AI coding assistant):\n\n${context}\n\nWrite a 2-3 sentence summary of what was worked on across this session. Be concise and factual. Reply with only the summary.`
 
     const model = settings.titleProvider === 'anthropic'
       ? createAnthropic({ apiKey })(settings.model || 'claude-haiku-4-5-20251001')
@@ -108,7 +115,7 @@ export async function generateTitle(
     const context = latestPrompt && latestPrompt !== firstPrompt
       ? `Opening message: "${firstPrompt.slice(0, 300)}"\nLatest message: "${latestPrompt.slice(0, 200)}"`
       : `"${firstPrompt.slice(0, 500)}"`
-    const prompt = `Generate a title (5 words or less, no punctuation, no quotes) for this conversation: ${context}. Reply with only the title.`
+    const prompt = `Generate a title (5 words or less, no punctuation, no quotes) for a Claude Code session (an AI coding assistant). ${context}. Reply with only the title.`
 
     const model = settings.titleProvider === 'anthropic'
       ? createAnthropic({ apiKey })(settings.model || 'claude-haiku-4-5-20251001')

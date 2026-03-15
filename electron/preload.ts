@@ -74,6 +74,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   generateSessionTitle: (sessionId: string, firstPrompt: string, latestPrompt?: string): Promise<string | null> =>
     ipcRenderer.invoke('title:generate', { sessionId, firstPrompt, latestPrompt }),
 
+  clearTitleCache: (sessionId: string): Promise<void> =>
+    ipcRenderer.invoke('title:clearCache', sessionId),
+
   generateSessionSummary: (sessionId: string, firstPrompt: string, latestPrompt?: string): Promise<string | null> =>
     ipcRenderer.invoke('summary:generate', { sessionId, firstPrompt, latestPrompt }),
 

@@ -12,7 +12,7 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { ClaudeSession } from './types/ipc'
 
 export default function App() {
-  const { sessions, activeId, addSession, removeSession, setActive, renameSession, togglePin, setAiTitle } = useSessionsStore()
+  const { sessions, activeId, addSession, removeSession, setActive, renameSession, togglePin, setAiTitle, clearAiTitle } = useSessionsStore()
   const [showModal, setShowModal] = useState(false)
   const [showSidebar, setShowSidebar] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
@@ -293,6 +293,7 @@ export default function App() {
       if (session.type !== 'claude') continue
       if (session.status !== 'waiting') continue
       if (session.aiTitle) continue
+      if (!session.userHasTyped) continue
       if (titledSessionIds.current.has(session.id)) continue
       titledSessionIds.current.add(session.id)
       const tabId = session.id
@@ -314,6 +315,17 @@ export default function App() {
     }
   }, [sessions, setAiTitle])
 
+  const handleRegenerateTitle = useCallback(async (id: string) => {
+    const session = sessions.find(s => s.id === id)
+    if (!session) return
+    // Clear server-side cache for both possible keys
+    await window.electronAPI.clearTitleCache(session.claudeSessionId ?? id)
+    await window.electronAPI.clearTitleCache(id)
+    // Clear client-side state and re-arm the generation effect
+    clearAiTitle(id)
+    titledSessionIds.current.delete(id)
+  }, [sessions, clearAiTitle])
+
   return (
     <div className="flex flex-col w-full h-full">
       <TabBar
@@ -330,6 +342,7 @@ export default function App() {
         onForkTab={handleForkTab}
         onSplitHTab={(id) => handleSplit(id, 'h')}
         onSplitVTab={(id) => handleSplit(id, 'v')}
+        onRegenerateTitle={handleRegenerateTitle}
         historyOpen={showHistory}
         onToggleHistory={toggleHistory}
         sidebarOpen={showSidebar}
@@ -348,6 +361,7 @@ export default function App() {
             onSelect={setActive}
             onClose={handleCloseTab}
             onFork={handleForkTab}
+            onRegenerateTitle={handleRegenerateTitle}
             onNewSession={openModal}
           />
         )}

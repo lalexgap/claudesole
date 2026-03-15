@@ -23,6 +23,8 @@ export function useTerminal(
 ) {
   const markRunning = useSessionsStore((s) => s.markRunning)
   const markWaiting = useSessionsStore((s) => s.markWaiting)
+  const setUserHasTyped = useSessionsStore((s) => s.setUserHasTyped)
+  const hasMarkedUserTypedRef = useRef(false)
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const notifiedIdleRef = useRef(false)
   const suppressRunningUntil = useRef(0)
@@ -118,6 +120,10 @@ export function useTerminal(
       // Suppress green flash: echoes of user input arrive within ~10ms
       suppressRunningUntil.current = Date.now() + 150
       userActedRef.current = true
+      if (!hasMarkedUserTypedRef.current) {
+        hasMarkedUserTypedRef.current = true
+        setUserHasTyped(sessionId)
+      }
     })
 
     // Request notification permission on first use

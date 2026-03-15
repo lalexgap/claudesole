@@ -55,7 +55,8 @@ function parseFile(filePath: string, fileSize: number): { cwd?: string; slug?: s
         if (!slug && obj.slug) slug = obj.slug
         if (!firstPrompt && obj.type === 'user') {
           const text = extractText(obj.message?.content)
-          if (text) firstPrompt = text
+          // Skip system-injected messages (caveat notices, tool context) which are wrapped in XML tags
+          if (text && !text.startsWith('<')) firstPrompt = text
         }
         if (cwd && slug && firstPrompt) break
       } catch {}
@@ -91,7 +92,7 @@ function findTailData(filePath: string, fileSize: number): TailData {
       const obj = JSON.parse(trimmed)
       if (result.latestPrompt === undefined && obj.type === 'user') {
         const t = extractText(obj.message?.content)
-        if (t) result.latestPrompt = t
+        if (t && !t.startsWith('<')) result.latestPrompt = t
       }
       if (result.tokensUsed === undefined && obj.type === 'assistant') {
         const usage = obj.message?.usage
@@ -138,6 +139,11 @@ function findTailData(filePath: string, fileSize: number): TailData {
 
 let cachedSessions: ClaudeSession[] | null = null
 let cacheExpiresAt = 0
+
+export function invalidateSessionsCache(): void {
+  cachedSessions = null
+  cacheExpiresAt = 0
+}
 
 export function listClaudeSessions(): ClaudeSession[] {
   if (cachedSessions && Date.now() < cacheExpiresAt) return cachedSessions
@@ -238,7 +244,7 @@ export function buildSummaryContext(sessionId: string): string | null {
           const obj = JSON.parse(line)
           if (obj.type === 'user') {
             const text = extractText(obj.message?.content)
-            if (text) messages.push(text.slice(0, 300))
+            if (text && !text.startsWith('<')) messages.push(text.slice(0, 300))
           }
         } catch {}
       }

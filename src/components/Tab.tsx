@@ -13,12 +13,13 @@ interface TabProps {
   onFork: () => void
   onSplitH: () => void
   onSplitV: () => void
+  onRegenerateTitle?: () => void
   onDragStart?: (e: React.DragEvent) => void
   onDragOver?: (e: React.DragEvent, el: HTMLDivElement) => void
   onDragEnd?: () => void
 }
 
-export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename, onPin, onFork, onSplitH, onSplitV, onDragStart, onDragOver, onDragEnd }: TabProps) {
+export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename, onPin, onFork, onSplitH, onSplitV, onRegenerateTitle, onDragStart, onDragOver, onDragEnd }: TabProps) {
   const divRef = useRef<HTMLDivElement>(null)
   const [draggable, setDraggable] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -148,6 +149,7 @@ export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename,
           onFork={() => { setCtxMenu(null); onFork() }}
           onSplitH={() => { setCtxMenu(null); onSplitH() }}
           onSplitV={() => { setCtxMenu(null); onSplitV() }}
+          onRegenerateTitle={onRegenerateTitle ? () => { setCtxMenu(null); onRegenerateTitle() } : undefined}
           onCloseTab={(e) => { setCtxMenu(null); onClose(e) }}
         />
       )}
@@ -155,10 +157,11 @@ export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename,
   )
 }
 
-function TabContextMenu({ x, y, isPinned, isShell, onClose, onRename, onPin, onFork, onSplitH, onSplitV, onCloseTab }: {
+function TabContextMenu({ x, y, isPinned, isShell, onClose, onRename, onPin, onFork, onSplitH, onSplitV, onRegenerateTitle, onCloseTab }: {
   x: number; y: number; isPinned: boolean; isShell: boolean
   onClose: () => void; onRename: () => void; onPin: () => void
   onFork: () => void; onSplitH: () => void; onSplitV: () => void
+  onRegenerateTitle?: () => void
   onCloseTab: (e: React.MouseEvent) => void
 }) {
   useEffect(() => {
@@ -177,6 +180,7 @@ function TabContextMenu({ x, y, isPinned, isShell, onClose, onRename, onPin, onF
       <CtxItem onClick={onRename}>Rename</CtxItem>
       <CtxItem onClick={onPin}>{isPinned ? 'Unpin' : 'Pin'}</CtxItem>
       {!isShell && <CtxItem onClick={onFork}>Fork (new in same dir)</CtxItem>}
+      {!isShell && onRegenerateTitle && <CtxItem onClick={onRegenerateTitle}>Regenerate title</CtxItem>}
       <div className="h-px bg-app-500 my-[3px]" />
       <CtxItem onClick={onSplitH}>Split right →</CtxItem>
       <CtxItem onClick={onSplitV}>Split below ↓</CtxItem>

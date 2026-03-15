@@ -67,6 +67,7 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
   const [hoveredRow, setHoveredRow] = useState<string | null>(null)
   const [gitInfo, setGitInfo] = useState<{ branch: string | null; isWorktree: boolean } | null>(null)
   const [summary, setSummary] = useState<string | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; session: ClaudeSession } | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -107,6 +108,30 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  useEffect(() => {
+    if (!ctxMenu) return
+    const hide = () => setCtxMenu(null)
+    window.addEventListener('click', hide)
+    window.addEventListener('contextmenu', hide)
+    return () => { window.removeEventListener('click', hide); window.removeEventListener('contextmenu', hide) }
+  }, [ctxMenu])
+
+  const handleRegenerateTitle = async (session: ClaudeSession) => {
+    await window.electronAPI.clearTitleCache(session.sessionId)
+    const title = await window.electronAPI.generateSessionTitle(session.sessionId, session.firstPrompt, session.latestPrompt || undefined)
+    if (title) setSessions(prev => prev.map(s => s.sessionId === session.sessionId ? { ...s, title } : s))
+  }
+
+  const handleRegenerateSummary = async (session: ClaudeSession) => {
+    await window.electronAPI.clearTitleCache(session.sessionId)
+    if (selected?.sessionId === session.sessionId) setSummary(null)
+    const s = await window.electronAPI.generateSessionSummary(session.sessionId, session.firstPrompt, session.latestPrompt || undefined)
+    if (s) {
+      setSessions(prev => prev.map(p => p.sessionId === session.sessionId ? { ...p, summary: s } : p))
+      if (selected?.sessionId === session.sessionId) setSummary(s)
+    }
+  }
 
   const toggleFavorite = (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -192,6 +217,7 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
                     onDoubleClick={() => { onResume(session, skipPermissions) }}
                     onMouseEnter={() => setHoveredRow(session.sessionId)}
                     onMouseLeave={() => setHoveredRow(null)}
+                    onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, session }) }}
                     className={clsx(
                       'px-4 py-[7px] cursor-pointer border-l-2 flex items-start gap-1.5',
                       isSelected ? 'bg-white/[0.07] border-[#555]' : 'bg-transparent border-transparent'
@@ -317,7 +343,7 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
             </div>
 
             {/* Actions */}
-            <div className="flex gap-2 mt-1">
+            <div className="flex gap-2 mt-1 flex-wrap">
               <ActionButton onClick={() => onResume(selected, skipPermissions)} primary>
                 Resume in new tab
               </ActionButton>
@@ -327,6 +353,14 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
               >
                 Fork
               </ActionButton>
+              <ActionButton onClick={() => handleRegenerateTitle(selected)}>
+                Regenerate title
+              </ActionButton>
+              {selected.firstPrompt && (
+                <ActionButton onClick={() => handleRegenerateSummary(selected)}>
+                  Regenerate summary
+                </ActionButton>
+              )}
             </div>
           </div>
         ) : (
@@ -335,6 +369,40 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
           </div>
         )}
       </div>
+
+      {ctxMenu && (
+        <div
+          className="fixed z-[9999] bg-app-750 border border-app-400 rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.6)] p-1 min-w-[170px]"
+          style={{ top: ctxMenu.y, left: ctxMenu.x }}
+          onClick={e => e.stopPropagation()}
+        >
+          <HistCtxItem onClick={() => { setCtxMenu(null); handleRegenerateTitle(ctxMenu.session) }}>
+            Regenerate title
+          </HistCtxItem>
+          {ctxMenu.session.firstPrompt && (
+            <HistCtxItem onClick={() => { setCtxMenu(null); handleRegenerateSummary(ctxMenu.session) }}>
+              Regenerate summary
+            </HistCtxItem>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function HistCtxItem({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      className={clsx(
+        'px-2.5 py-1.5 rounded cursor-pointer text-xs',
+        hov ? 'bg-white/[0.06] text-neutral-200' : 'bg-transparent text-[#aaa]',
+      )}
+    >
+      {children}
     </div>
   )
 }

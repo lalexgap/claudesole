@@ -18,6 +18,7 @@ interface TabBarProps {
   onForkTab: (id: string) => void
   onSplitHTab: (id: string) => void
   onSplitVTab: (id: string) => void
+  onRegenerateTitle: (id: string) => void
   historyOpen: boolean
   onToggleHistory: () => void
   sidebarOpen: boolean
@@ -30,7 +31,7 @@ interface TabBarProps {
 
 export function TabBar({
   sessions, allSessions, paneRoots, activeId, onSelectTab, onCloseTab, onNewTab, onNewShellTab,
-  onRenameTab, onPinTab, onForkTab, onSplitHTab, onSplitVTab,
+  onRenameTab, onPinTab, onForkTab, onSplitHTab, onSplitVTab, onRegenerateTitle,
   historyOpen, onToggleHistory, sidebarOpen, onToggleSidebar,
   worktreesOpen, onToggleWorktrees, settingsOpen, onToggleSettings,
 }: TabBarProps) {
@@ -107,6 +108,7 @@ export function TabBar({
             onFork={() => onForkTab(session.id)}
             onSplitH={() => onSplitHTab(session.id)}
             onSplitV={() => onSplitVTab(session.id)}
+            onRegenerateTitle={() => onRegenerateTitle(session.id)}
             onDragStart={e => handleDragStart(e, session.id)}
             onDragOver={(e, el) => handleDragOver(e, i, el)}
             onDragEnd={handleDragEnd}

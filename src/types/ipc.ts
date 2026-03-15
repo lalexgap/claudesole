@@ -49,6 +49,7 @@ export interface ElectronAPI {
   getLatestSession: (cwd: string) => Promise<ClaudeSession | null>
   generateSessionTitle: (sessionId: string, firstPrompt: string, latestPrompt?: string) => Promise<string | null>
   generateSessionSummary: (sessionId: string, firstPrompt: string, latestPrompt?: string) => Promise<string | null>
+  clearTitleCache: (sessionId: string) => Promise<void>
   getLogs: () => Promise<{ level: string; msg: string; ts: number }[]>
   onLog: (callback: (entry: { level: string; msg: string; ts: number }) => void) => () => void
   getSettings: () => Promise<AppSettings>

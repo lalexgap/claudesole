@@ -14,6 +14,7 @@ export interface Session {
   claudeSessionId?: string // the Claude-assigned session UUID (known for resumed sessions)
   isWorktree?: boolean
   aiTitle?: string
+  userHasTyped?: boolean  // true once the user has sent input in this tab session
 }
 
 interface SessionsState {
@@ -28,6 +29,8 @@ interface SessionsState {
   togglePin: (id: string) => void
   reorderSession: (id: string, toIndex: number) => void
   setAiTitle: (id: string, title: string) => void
+  clearAiTitle: (id: string) => void
+  setUserHasTyped: (id: string) => void
 }
 
 export const useSessionsStore = create<SessionsState>((set) => ({
@@ -89,5 +92,15 @@ export const useSessionsStore = create<SessionsState>((set) => ({
   setAiTitle: (id: string, title: string) =>
     set((state) => ({
       sessions: state.sessions.map((s) => s.id === id ? { ...s, aiTitle: title } : s),
+    })),
+
+  clearAiTitle: (id: string) =>
+    set((state) => ({
+      sessions: state.sessions.map((s) => s.id === id ? { ...s, aiTitle: undefined } : s),
+    })),
+
+  setUserHasTyped: (id: string) =>
+    set((state) => ({
+      sessions: state.sessions.map((s) => s.id === id && !s.userHasTyped ? { ...s, userHasTyped: true } : s),
     })),
 }))

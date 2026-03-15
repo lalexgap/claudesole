@@ -2,9 +2,9 @@ import { app, BrowserWindow, ipcMain, dialog, session, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { createSession, createShellSession, writeToSession, resizeSession, killSession } from './ptyManager'
-import { listClaudeSessions, latestSessionIdForCwd, latestSessionForCwd, getUsageForCwd, buildSummaryContext } from './sessionManager'
+import { listClaudeSessions, latestSessionIdForCwd, latestSessionForCwd, getUsageForCwd, buildSummaryContext, invalidateSessionsCache } from './sessionManager'
 import { getGitInfo, listWorktrees, removeWorktree, listBranches, createWorktree } from './gitInfo'
-import { generateTitle, generateSummary } from './titleManager'
+import { generateTitle, generateSummary, clearTitleCache } from './titleManager'
 import { getSettings, saveSettings } from './settingsManager'
 
 // ── Log capture ──────────────────────────────────────────────────────────────
@@ -56,7 +56,12 @@ function setupIpcHandlers() {
   ipcMain.handle('sessions:list', () => listClaudeSessions())
 
   ipcMain.handle('sessions:latestForCwd', (_event, cwd: string) => latestSessionIdForCwd(cwd))
-  ipcMain.handle('sessions:latestSession', (_event, cwd: string) => latestSessionForCwd(cwd))
+  ipcMain.handle('sessions:latestSession', (_event, cwd: string) => {
+    // Force fresh disk read — stale cache could return the previous session's JSONL
+    // before the new session's file has been written, causing the old title to be reused.
+    invalidateSessionsCache()
+    return latestSessionForCwd(cwd)
+  })
 
   ipcMain.handle('sessions:getUsage', (_event, cwd: string) => getUsageForCwd(cwd))
 
@@ -141,6 +146,10 @@ function setupIpcHandlers() {
 
   ipcMain.handle('title:generate', (_e, { sessionId, firstPrompt, latestPrompt }: { sessionId: string; firstPrompt: string; latestPrompt?: string }) =>
     generateTitle(sessionId, firstPrompt, latestPrompt))
+
+  ipcMain.handle('title:clearCache', (_e, sessionId: string) => {
+    clearTitleCache(sessionId)
+  })
 
   ipcMain.handle('summary:generate', (_e, { sessionId, firstPrompt }: { sessionId: string; firstPrompt: string; latestPrompt?: string }) => {
     const context = buildSummaryContext(sessionId) ?? firstPrompt

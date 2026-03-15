@@ -9,11 +9,13 @@ interface Props {
   onSelect: (id: string) => void
   onClose: (id: string) => void
   onFork: (id: string) => void
+  onRegenerateTitle: (id: string) => void
   onNewSession: () => void
 }
 
-export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, onNewSession }: Props) {
+export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, onRegenerateTitle, onNewSession }: Props) {
   const [hovered, setHovered] = useState<string | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; id: string } | null>(null)
   const [tokensUsed, setTokensUsed] = useState<number | undefined>(undefined)
   const [gitInfo, setGitInfo] = useState<{ branch: string | null; isWorktree: boolean } | null>(null)
 
@@ -28,6 +30,14 @@ export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, 
     })
     window.electronAPI.getGitInfo(selectedSession.cwd).then(setGitInfo)
   }, [selectedSession?.id])
+
+  useEffect(() => {
+    if (!ctxMenu) return
+    const hide = () => setCtxMenu(null)
+    window.addEventListener('click', hide)
+    window.addEventListener('contextmenu', hide)
+    return () => { window.removeEventListener('click', hide); window.removeEventListener('contextmenu', hide) }
+  }, [ctxMenu])
 
   return (
     <div className="w-[220px] shrink-0 bg-app-850 border-r border-app-650 flex flex-col overflow-hidden">
@@ -53,6 +63,7 @@ export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, 
               onClick={() => onSelect(session.id)}
               onMouseEnter={() => setHovered(session.id)}
               onMouseLeave={() => setHovered(null)}
+              onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, id: session.id }) }}
               className={clsx(
                 'px-2.5 py-2 cursor-pointer border-l-2 flex items-start gap-2',
                 isActive ? 'bg-white/[0.06] border-[#666]' : isHovered ? 'bg-white/[0.03] border-transparent' : 'bg-transparent border-transparent'
@@ -67,7 +78,7 @@ export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, 
                   'text-[13px] overflow-hidden text-ellipsis whitespace-nowrap',
                   isActive ? 'text-neutral-200 font-medium' : 'text-[#bbb]'
                 )}>
-                  {session.label}
+                  {session.aiTitle || session.label}
                 </div>
                 {session.isWorktree && (
                   <span className="text-[8px] text-blue-400 bg-blue-400/[0.12] border border-blue-400/30 rounded-sm px-1 py-px uppercase tracking-[0.05em] self-start">
@@ -99,7 +110,7 @@ export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, 
               'w-[7px] h-[7px] rounded-full shrink-0 transition-colors duration-200',
               selectedSession.status === 'running' ? 'bg-green-400' : 'bg-red-400'
             )} />
-            <span className="text-[#ccc] text-xs font-medium">{selectedSession.label}</span>
+            <span className="text-[#ccc] text-xs font-medium">{selectedSession.aiTitle || selectedSession.label}</span>
             <span className="text-[9px] text-[#555] ml-auto uppercase tracking-[0.05em]">
               {selectedSession.status === 'running' ? 'active' : 'idle'}
             </span>
@@ -123,9 +134,7 @@ export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, 
           )}
           <ContextBar tokensUsed={tokensUsed} compact />
           {selectedSession.firstPrompt && (
-            <div
-              className="text-[#666] text-[11px] leading-[1.5] mt-0.5 line-clamp-4"
-            >
+            <div className="text-[#666] text-[11px] leading-[1.5] mt-0.5 line-clamp-4">
               {selectedSession.firstPrompt}
             </div>
           )}
@@ -149,6 +158,50 @@ export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, 
         <span className="text-green-400 text-[13px]">+</span>
         New session
       </div>
+
+      {/* Context menu */}
+      {ctxMenu && (
+        <div
+          className="fixed z-[9999] bg-app-750 border border-app-400 rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.6)] p-1 min-w-[160px]"
+          style={{ top: ctxMenu.y, left: ctxMenu.x }}
+          onClick={e => e.stopPropagation()}
+        >
+          <SidebarCtxItem onClick={() => { setCtxMenu(null); onRegenerateTitle(ctxMenu.id) }}>
+            Regenerate title
+          </SidebarCtxItem>
+          <SidebarCtxItem onClick={() => { setCtxMenu(null); onFork(ctxMenu.id) }}>
+            Fork session
+          </SidebarCtxItem>
+          <div className="h-px bg-app-500 my-[3px]" />
+          <SidebarCtxItem danger onClick={() => { setCtxMenu(null); onClose(ctxMenu.id) }}>
+            Close session
+          </SidebarCtxItem>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SidebarCtxItem({ children, onClick, danger }: {
+  children: React.ReactNode
+  onClick: () => void
+  danger?: boolean
+}) {
+  const [hov, setHov] = useState(false)
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      className={clsx(
+        'px-2.5 py-1.5 rounded cursor-pointer text-xs',
+        hov ? 'bg-white/[0.06]' : 'bg-transparent',
+        danger
+          ? hov ? 'text-[#ff7070]' : 'text-[#cc4444]'
+          : hov ? 'text-neutral-200' : 'text-[#aaa]',
+      )}
+    >
+      {children}
     </div>
   )
 }
