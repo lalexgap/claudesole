@@ -4,7 +4,7 @@ import { resolve } from 'path'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: ['ai', '@ai-sdk/anthropic', '@ai-sdk/openai', '@ai-sdk/provider', '@ai-sdk/provider-utils', '@ai-sdk/gateway', 'zod'] })],
     build: {
       rollupOptions: {
         input: resolve(__dirname, 'electron/main.ts'),
