@@ -52,7 +52,7 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
     searchRef.current?.focus()
     window.electronAPI.listSessions().then(all =>
       setSessions(all.filter(s => !s.cwd.includes('/.claude/worktrees/')))
-    )
+    ).catch(() => {})
   }, [])
 
   const q = query.toLowerCase()
@@ -94,6 +94,7 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
     if (summaries[id] || activeSession.summary) return
     window.electronAPI.generateSessionSummary(id, activeSession.firstPrompt, activeSession.latestPrompt || undefined)
       .then(s => { if (s) setSummaries(prev => ({ ...prev, [id]: s })) })
+      .catch(() => {})
   }, [activeSession?.sessionId])
 
   const branchInputRef = useRef<HTMLInputElement>(null)
@@ -106,7 +107,7 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
 
   useEffect(() => {
     if (worktree && pendingCwd) {
-      window.electronAPI.listBranches(pendingCwd).then(bs => { setBranches(bs); setBranchIdx(0) })
+      window.electronAPI.listBranches(pendingCwd).then(bs => { setBranches(bs); setBranchIdx(0) }).catch(() => {})
     } else {
       setBranches([])
     }

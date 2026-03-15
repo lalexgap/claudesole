@@ -310,7 +310,7 @@ export default function App() {
         }
         const title = await window.electronAPI.generateSessionTitle(cacheKey, prompt)
         if (title) setAiTitle(tabId, title)
-      })()
+      })().catch(() => {})
     }
   }, [sessions, setAiTitle])
 

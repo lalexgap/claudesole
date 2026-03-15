@@ -38,6 +38,16 @@ function validateDir(p: unknown): string {
   return resolved
 }
 
+function isSafeUrl(url: unknown): url is string {
+  if (typeof url !== 'string') return false
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 // Mutable reference updated each time a window is created, used by IPC handlers
 // that need to communicate back to the renderer.
 let win: BrowserWindow | null = null
@@ -124,7 +134,7 @@ function setupIpcHandlers() {
   })
 
   ipcMain.on('shell:openExternal', (_event, url: string) => {
-    if (typeof url === 'string' && /^https?:\/\//.test(url)) {
+    if (isSafeUrl(url)) {
       shell.openExternal(url)
     }
   })
@@ -165,13 +175,13 @@ function createWindow() {
 
   // Prevent external URLs from opening inside the app
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//.test(url)) shell.openExternal(url)
+    if (isSafeUrl(url)) shell.openExternal(url)
     return { action: 'deny' }
   })
   win.webContents.on('will-navigate', (event, url) => {
     if (!url.startsWith('http://localhost') && !url.startsWith('file://')) {
       event.preventDefault()
-      if (/^https?:\/\//.test(url)) shell.openExternal(url)
+      if (isSafeUrl(url)) shell.openExternal(url)
     }
   })
 
