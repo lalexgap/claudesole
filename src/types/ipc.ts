@@ -54,6 +54,9 @@ export interface ElectronAPI {
   onLog: (callback: (entry: { level: string; msg: string; ts: number }) => void) => () => void
   getSettings: () => Promise<AppSettings>
   saveSettings: (s: AppSettings) => Promise<boolean>
+  embeddingsAvailable: () => Promise<boolean>
+  ensureEmbeddings: (sessions: ClaudeSession[]) => Promise<{ total: number; indexed: number }>
+  semanticSearch: (query: string, sessions: ClaudeSession[], topK?: number) => Promise<Array<{ session: ClaudeSession; score: number }>>
 }
 
 declare global {

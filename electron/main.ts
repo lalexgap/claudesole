@@ -5,6 +5,7 @@ import { createSession, createShellSession, writeToSession, resizeSession, killS
 import { listClaudeSessions, latestSessionIdForCwd, latestSessionForCwd, getUsageForCwd, buildSummaryContext, invalidateSessionsCache } from './sessionManager'
 import { getGitInfo, listWorktrees, removeWorktree, listBranches, createWorktree } from './gitInfo'
 import { generateTitle, generateSummary, clearTitleCache } from './titleManager'
+import { ensureEmbeddings, semanticSearch, getIndexedCount, isEmbeddingAvailable } from './embeddingManager'
 import { getSettings, saveSettings } from './settingsManager'
 
 // ── Log capture ──────────────────────────────────────────────────────────────
@@ -155,6 +156,17 @@ function setupIpcHandlers() {
     const context = buildSummaryContext(sessionId) ?? firstPrompt
     return generateSummary(sessionId, context)
   })
+
+  ipcMain.handle('embeddings:available', () => isEmbeddingAvailable())
+
+  ipcMain.handle('embeddings:ensure', (_e, sessions) => {
+    ensureEmbeddings(sessions).catch(err => console.error('[main] embeddings:ensure:', err))
+    return { total: sessions.length, indexed: getIndexedCount() }
+  })
+
+  ipcMain.handle('embeddings:search', (_e, { query, sessions, topK }) =>
+    semanticSearch(query, sessions, topK ?? 20)
+  )
 
   ipcMain.handle('logs:get', () => [...logBuffer])
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import clsx from 'clsx'
 import { ClaudeSession } from '../types/ipc'
 import { ContextBar } from './ContextBar'
@@ -68,7 +68,12 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
   const [gitInfo, setGitInfo] = useState<{ branch: string | null; isWorktree: boolean } | null>(null)
   const [summary, setSummary] = useState<string | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; session: ClaudeSession } | null>(null)
+  const [searchMode, setSearchMode] = useState<'text' | 'semantic'>('text')
+  const [semanticResults, setSemanticResults] = useState<Array<{ session: ClaudeSession; score: number }> | null>(null)
+  const [isSearching, setIsSearching] = useState(false)
+  const [semanticAvailable, setSemanticAvailable] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     searchRef.current?.focus()
@@ -83,6 +88,15 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
           })
           .catch(() => {})
       }
+      // Check if semantic search is available and kick off background indexing
+      window.electronAPI.embeddingsAvailable()
+        .then(available => {
+          if (available) {
+            setSemanticAvailable(true)
+            window.electronAPI.ensureEmbeddings(all).catch(() => {})
+          }
+        })
+        .catch(() => {})
     }).catch(() => {})
   }, [])
 
@@ -117,6 +131,26 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
     return () => { window.removeEventListener('click', hide); window.removeEventListener('contextmenu', hide) }
   }, [ctxMenu])
 
+  useEffect(() => {
+    if (searchMode !== 'semantic' || !query.trim()) {
+      setSemanticResults(null)
+      return
+    }
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    searchDebounceRef.current = setTimeout(async () => {
+      setIsSearching(true)
+      try {
+        const results = await window.electronAPI.semanticSearch(query, sessions)
+        setSemanticResults(results)
+      } catch {
+        setSemanticResults(null)
+      } finally {
+        setIsSearching(false)
+      }
+    }, 400)
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
+  }, [query, searchMode, sessions])
+
   const handleRegenerateTitle = async (session: ClaudeSession) => {
     await window.electronAPI.clearTitleCache(session.sessionId)
     const title = await window.electronAPI.generateSessionTitle(session.sessionId, session.firstPrompt, session.latestPrompt || undefined)
@@ -144,22 +178,34 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
     })
   }
 
-  const q = query.toLowerCase()
-  const filtered = sessions.filter(s =>
-    !q ||
-    s.projectName.toLowerCase().includes(q) ||
-    s.slug.toLowerCase().includes(q) ||
-    s.cwd.toLowerCase().includes(q) ||
-    s.firstPrompt.toLowerCase().includes(q) ||
-    (s.title || '').toLowerCase().includes(q)
-  )
+  const filtered = useMemo(() => {
+    if (searchMode === 'semantic' && semanticResults !== null) {
+      return semanticResults.map(r => r.session)
+    }
+    const q = query.toLowerCase()
+    return sessions.filter(s =>
+      !q ||
+      s.projectName.toLowerCase().includes(q) ||
+      s.slug.toLowerCase().includes(q) ||
+      s.cwd.toLowerCase().includes(q) ||
+      s.firstPrompt.toLowerCase().includes(q) ||
+      (s.title || '').toLowerCase().includes(q)
+    )
+  }, [searchMode, semanticResults, query, sessions])
+
+  const scoreMap = useMemo<Record<string, number>>(() => {
+    if (!semanticResults) return {}
+    return Object.fromEntries(semanticResults.map(r => [r.session.sessionId, r.score]))
+  }, [semanticResults])
 
   const favSessions = filtered.filter(s => favorites.has(s.sessionId))
   const nonFavSessions = filtered.filter(s => !favorites.has(s.sessionId))
-  const groups: Group[] = [
-    ...(favSessions.length > 0 ? [{ label: '★ Favorites', sessions: favSessions }] : []),
-    ...groupSessions(nonFavSessions),
-  ]
+  const groups: Group[] = searchMode === 'semantic' && semanticResults !== null
+    ? (filtered.length > 0 ? [{ label: 'Semantic results', sessions: filtered }] : [])
+    : [
+        ...(favSessions.length > 0 ? [{ label: '★ Favorites', sessions: favSessions }] : []),
+        ...groupSessions(nonFavSessions),
+      ]
 
   return (
     <div className="absolute inset-0 bg-app-900 flex flex-col z-50">
@@ -175,6 +221,20 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
           placeholder="Search sessions…"
           className="flex-1 bg-white/[0.05] border border-app-500 rounded-md px-2.5 py-[5px] text-neutral-200 text-[13px] outline-none"
         />
+        {semanticAvailable && (
+          <button
+            onClick={() => { setSearchMode(m => m === 'text' ? 'semantic' : 'text'); setSemanticResults(null) }}
+            title={searchMode === 'semantic' ? 'Switch to text search' : 'Switch to semantic search'}
+            className={clsx(
+              'shrink-0 px-2 py-[5px] rounded-md text-[11px] border transition-colors duration-150',
+              searchMode === 'semantic'
+                ? 'border-blue-500/50 text-blue-400 bg-blue-400/[0.1]'
+                : 'border-app-500 text-[#555] bg-white/[0.04]'
+            )}
+          >
+            {isSearching ? 'Searching…' : '~ Semantic'}
+          </button>
+        )}
         <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
           <input
             type="checkbox"
@@ -234,6 +294,11 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
                         <span className="text-[#555] text-[11px] shrink-0">
                           {relativeTime(session.lastActivity)}
                         </span>
+                        {scoreMap[session.sessionId] !== undefined && (
+                          <span className="text-[9px] text-blue-400/60 font-mono shrink-0">
+                            {(scoreMap[session.sessionId] * 100).toFixed(0)}%
+                          </span>
+                        )}
                       </div>
                       {(session.latestPrompt || session.firstPrompt) && (
                         <div className="text-[#666] text-[11px] mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap">
