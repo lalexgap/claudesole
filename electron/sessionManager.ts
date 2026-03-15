@@ -212,6 +212,52 @@ function _listClaudeSessions(): ClaudeSession[] {
   return sessions.sort((a, b) => b.lastActivity - a.lastActivity)
 }
 
+export function buildSummaryContext(sessionId: string): string | null {
+  const projectsDir = path.join(os.homedir(), '.claude', 'projects')
+  let filePath: string | null = null
+  let fileSize = 0
+  try {
+    for (const entry of fs.readdirSync(projectsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      const fp = path.join(projectsDir, entry.name, `${sessionId}.jsonl`)
+      try { const st = fs.statSync(fp); filePath = fp; fileSize = st.size; break } catch {}
+    }
+  } catch { return null }
+  if (!filePath) return null
+
+  const messages: string[] = []
+  try {
+    const MAX_READ = 512 * 1024
+    const buf = Buffer.alloc(Math.min(fileSize, MAX_READ))
+    const fd = fs.openSync(filePath, 'r')
+    try {
+      const n = fs.readSync(fd, buf, 0, buf.length, 0)
+      for (const line of buf.slice(0, n).toString('utf-8').split('\n')) {
+        if (!line.trim()) continue
+        try {
+          const obj = JSON.parse(line)
+          if (obj.type === 'user') {
+            const text = extractText(obj.message?.content)
+            if (text) messages.push(text.slice(0, 300))
+          }
+        } catch {}
+      }
+    } finally { fs.closeSync(fd) }
+  } catch { return null }
+
+  if (messages.length === 0) return null
+
+  // Sample up to 12 messages: first 4, middle 4, last 4 to cover the whole arc
+  let sample: string[]
+  if (messages.length <= 12) {
+    sample = messages
+  } else {
+    const mid = Math.floor(messages.length / 2)
+    sample = [...messages.slice(0, 4), ...messages.slice(mid - 2, mid + 2), ...messages.slice(-4)]
+  }
+  return sample.map((m, i) => `${i + 1}. ${m}`).join('\n')
+}
+
 export function latestSessionIdForCwd(cwd: string): string | null {
   const all = listClaudeSessions()
   return all.find(s => s.cwd === cwd)?.sessionId ?? null

@@ -57,7 +57,7 @@ export function getCachedSummary(sessionId: string): string | undefined {
 const inFlight = new Set<string>()
 
 export async function generateSummary(
-  sessionId: string, firstPrompt: string, latestPrompt?: string
+  sessionId: string, context: string
 ): Promise<string | null> {
   const key = `${sessionId}:summary`
   const cached = loadCache()[key]?.title
@@ -70,10 +70,7 @@ export async function generateSummary(
     const apiKey = resolveApiKey(settings.apiKey)
     if (!apiKey) return null
 
-    const context = latestPrompt && latestPrompt !== firstPrompt
-      ? `Opening message: "${firstPrompt.slice(0, 400)}"\nLatest message: "${latestPrompt.slice(0, 300)}"`
-      : `"${firstPrompt.slice(0, 700)}"`
-    const prompt = `Write a 1-2 sentence summary of what was worked on in this conversation: ${context}. Be concise and factual. Reply with only the summary.`
+    const prompt = `The following are the user's messages throughout a conversation with an AI assistant:\n\n${context}\n\nWrite a 2-3 sentence summary of what was worked on across this whole conversation. Be concise and factual. Reply with only the summary.`
 
     const model = settings.titleProvider === 'anthropic'
       ? createAnthropic({ apiKey })(settings.model || 'claude-haiku-4-5-20251001')

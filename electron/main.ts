@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, session, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { createSession, createShellSession, writeToSession, resizeSession, killSession } from './ptyManager'
-import { listClaudeSessions, latestSessionIdForCwd, latestSessionForCwd, getUsageForCwd } from './sessionManager'
+import { listClaudeSessions, latestSessionIdForCwd, latestSessionForCwd, getUsageForCwd, buildSummaryContext } from './sessionManager'
 import { getGitInfo, listWorktrees, removeWorktree, listBranches, createWorktree } from './gitInfo'
 import { generateTitle, generateSummary } from './titleManager'
 import { getSettings, saveSettings } from './settingsManager'
@@ -132,8 +132,10 @@ function setupIpcHandlers() {
   ipcMain.handle('title:generate', (_e, { sessionId, firstPrompt, latestPrompt }: { sessionId: string; firstPrompt: string; latestPrompt?: string }) =>
     generateTitle(sessionId, firstPrompt, latestPrompt))
 
-  ipcMain.handle('summary:generate', (_e, { sessionId, firstPrompt, latestPrompt }: { sessionId: string; firstPrompt: string; latestPrompt?: string }) =>
-    generateSummary(sessionId, firstPrompt, latestPrompt))
+  ipcMain.handle('summary:generate', (_e, { sessionId, firstPrompt }: { sessionId: string; firstPrompt: string; latestPrompt?: string }) => {
+    const context = buildSummaryContext(sessionId) ?? firstPrompt
+    return generateSummary(sessionId, context)
+  })
 
   ipcMain.handle('logs:get', () => [...logBuffer])
 
