@@ -297,21 +297,10 @@ export default function App() {
       if (titledSessionIds.current.has(session.id)) continue
       titledSessionIds.current.add(session.id)
       const tabId = session.id
-      const cwd = session.cwd
-      const inMemoryPrompt = session.firstPrompt;
+      const prompt = session.firstPrompt
+      if (!prompt) continue;
       (async () => {
-        let prompt = inMemoryPrompt
-        let cacheKey = tabId
-        if (!prompt) {
-          // New session: firstPrompt not captured in state — read from JSONL on disk.
-          // Always use tabId as cacheKey (not latest.sessionId) to avoid a race where
-          // getLatestSession returns the previous session before the new JSONL is written,
-          // causing the old cached title to be applied to the new tab.
-          const latest = await window.electronAPI.getLatestSession(cwd)
-          if (!latest?.firstPrompt) return
-          prompt = latest.firstPrompt
-        }
-        const title = await window.electronAPI.generateSessionTitle(cacheKey, prompt)
+        const title = await window.electronAPI.generateSessionTitle(tabId, prompt)
         if (title) setAiTitle(tabId, title)
       })().catch(() => {})
     }

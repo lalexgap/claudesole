@@ -24,7 +24,9 @@ export function useTerminal(
   const markRunning = useSessionsStore((s) => s.markRunning)
   const markWaiting = useSessionsStore((s) => s.markWaiting)
   const setUserHasTyped = useSessionsStore((s) => s.setUserHasTyped)
+  const setFirstPrompt = useSessionsStore((s) => s.setFirstPrompt)
   const hasMarkedUserTypedRef = useRef(false)
+  const hasSetFirstPromptRef = useRef(false)
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const notifiedIdleRef = useRef(false)
   const suppressRunningUntil = useRef(0)
@@ -115,6 +117,8 @@ export function useTerminal(
     }
     sendResize()
 
+    let inputBuffer = ''
+
     term.onData((data) => {
       window.electronAPI.writeSession(sessionId, data)
       // Suppress green flash: echoes of user input arrive within ~10ms
@@ -123,6 +127,27 @@ export function useTerminal(
       if (!hasMarkedUserTypedRef.current) {
         hasMarkedUserTypedRef.current = true
         setUserHasTyped(sessionId)
+      }
+      // Capture the user's first prompt from keystrokes so title generation
+      // doesn't need to read from disk (avoids same-cwd race conditions).
+      if (!hasSetFirstPromptRef.current) {
+        for (const char of data) {
+          if (char === '\r' || char === '\n') {
+            if (inputBuffer.trim()) {
+              hasSetFirstPromptRef.current = true
+              setFirstPrompt(sessionId, inputBuffer.trim())
+            }
+            inputBuffer = ''
+            break
+          } else if (char === '\x7f') {
+            inputBuffer = inputBuffer.slice(0, -1)
+          } else if (char === '\x03' || char === '\x1b') {
+            inputBuffer = ''
+            break
+          } else if (char.charCodeAt(0) >= 32) {
+            inputBuffer += char
+          }
+        }
       }
     })
 

@@ -31,6 +31,7 @@ interface SessionsState {
   setAiTitle: (id: string, title: string) => void
   clearAiTitle: (id: string) => void
   setUserHasTyped: (id: string) => void
+  setFirstPrompt: (id: string, prompt: string) => void
 }
 
 export const useSessionsStore = create<SessionsState>((set) => ({
@@ -102,5 +103,10 @@ export const useSessionsStore = create<SessionsState>((set) => ({
   setUserHasTyped: (id: string) =>
     set((state) => ({
       sessions: state.sessions.map((s) => s.id === id && !s.userHasTyped ? { ...s, userHasTyped: true } : s),
+    })),
+
+  setFirstPrompt: (id: string, prompt: string) =>
+    set((state) => ({
+      sessions: state.sessions.map((s) => s.id === id && !s.firstPrompt ? { ...s, firstPrompt: prompt } : s),
     })),
 }))
