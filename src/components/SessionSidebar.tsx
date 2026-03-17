@@ -18,17 +18,24 @@ export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, 
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; id: string } | null>(null)
   const [tokensUsed, setTokensUsed] = useState<number | undefined>(undefined)
   const [gitInfo, setGitInfo] = useState<{ branch: string | null; isWorktree: boolean } | null>(null)
+  const [summary, setSummary] = useState<string | null>(null)
 
   const selectedSession = sessions.find(s => s.id === activeId)
 
   useEffect(() => {
     setTokensUsed(undefined)
     setGitInfo(null)
+    setSummary(null)
     if (!selectedSession?.cwd) return
     window.electronAPI.getSessionUsage(selectedSession.cwd).then(usage => {
       setTokensUsed(usage?.tokensUsed)
     })
     window.electronAPI.getGitInfo(selectedSession.cwd).then(setGitInfo)
+    if (selectedSession.claudeSessionId && selectedSession.firstPrompt) {
+      window.electronAPI.generateSessionSummary(selectedSession.claudeSessionId, selectedSession.firstPrompt)
+        .then(s => { if (s) setSummary(s) })
+        .catch(() => {})
+    }
   }, [selectedSession?.id])
 
   useEffect(() => {
@@ -133,9 +140,12 @@ export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, 
             </div>
           )}
           <ContextBar tokensUsed={tokensUsed} compact />
-          {selectedSession.firstPrompt && (
-            <div className="text-[#666] text-[11px] leading-[1.5] mt-0.5 line-clamp-4">
-              {selectedSession.firstPrompt}
+          {(summary || selectedSession.firstPrompt) && (
+            <div className={clsx(
+              'text-[11px] leading-[1.5] mt-0.5 line-clamp-4',
+              summary ? 'text-[#888] italic' : 'text-[#666]'
+            )}>
+              {summary || selectedSession.firstPrompt}
             </div>
           )}
           <div className="text-[#444] text-[10px] font-mono break-all">

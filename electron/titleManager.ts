@@ -61,6 +61,12 @@ export function clearTitleCache(sessionId: string): void {
   saveCache()
 }
 
+export function clearAllTitleCache(): void {
+  memCache = {}
+  cacheLoaded = true
+  saveCache()
+}
+
 const inFlight = new Set<string>()
 
 export async function generateSummary(

@@ -4,7 +4,7 @@ import fs from 'fs'
 import { createSession, createShellSession, writeToSession, resizeSession, killSession } from './ptyManager'
 import { listClaudeSessions, latestSessionIdForCwd, latestSessionForCwd, getUsageForCwd, buildSummaryContext, invalidateSessionsCache } from './sessionManager'
 import { getGitInfo, listWorktrees, removeWorktree, listBranches, createWorktree } from './gitInfo'
-import { generateTitle, generateSummary, clearTitleCache } from './titleManager'
+import { generateTitle, generateSummary, clearTitleCache, clearAllTitleCache } from './titleManager'
 import { ensureEmbeddings, semanticSearch, getIndexedCount, isEmbeddingAvailable } from './embeddingManager'
 import { getSettings, saveSettings } from './settingsManager'
 
@@ -150,6 +150,10 @@ function setupIpcHandlers() {
 
   ipcMain.handle('title:clearCache', (_e, sessionId: string) => {
     clearTitleCache(sessionId)
+  })
+
+  ipcMain.handle('title:clearAllCache', () => {
+    clearAllTitleCache()
   })
 
   ipcMain.handle('summary:generate', (_e, { sessionId, firstPrompt }: { sessionId: string; firstPrompt: string; latestPrompt?: string }) => {

@@ -14,6 +14,7 @@ export function SettingsPanel({ onClose }: Props) {
     baseUrl: '',
   })
   const [saved, setSaved] = useState(false)
+  const [cacheCleared, setCacheCleared] = useState(false)
   const [logs, setLogs] = useState<{ level: string; msg: string; ts: number }[]>([])
   const logsContainerRef = useRef<HTMLDivElement>(null)
 
@@ -42,6 +43,12 @@ export function SettingsPanel({ onClose }: Props) {
     setTimeout(() => setSaved(false), 2000)
   }
 
+  const handleClearCache = async () => {
+    await window.electronAPI.clearAllTitleCache()
+    setCacheCleared(true)
+    setTimeout(() => setCacheCleared(false), 2000)
+  }
+
   const modelPlaceholder = settings.titleProvider === 'openai-compatible'
     ? 'e.g. moonshot-v1-8k'
     : 'e.g. claude-haiku-4-5-20251001'
@@ -66,10 +73,23 @@ export function SettingsPanel({ onClose }: Props) {
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-8 py-8 max-w-[520px]">
         <SectionHeading>AI Session Titles</SectionHeading>
-        <p className="text-[#555] text-xs mb-6 leading-relaxed">
+        <p className="text-[#555] text-xs mb-3 leading-relaxed">
           Automatically generate short titles for sessions using an AI API. Titles are cached locally in{' '}
           <code className="text-[#666]">~/.claude/claudesole-titles.json</code>.
         </p>
+        <div className="mb-6">
+          <button
+            onClick={handleClearCache}
+            className={clsx(
+              'px-3 py-1 rounded-md text-[11px] font-medium cursor-pointer border transition-[background,color] duration-200',
+              cacheCleared
+                ? 'bg-green-400/[0.15] border-green-400/30 text-green-400'
+                : 'bg-transparent border-app-500 text-[#666] hover:text-[#aaa]'
+            )}
+          >
+            {cacheCleared ? 'Cache cleared!' : 'Clear title cache'}
+          </button>
+        </div>
 
         <FormRow label="Title Provider">
           <select

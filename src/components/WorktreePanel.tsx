@@ -33,6 +33,7 @@ export function WorktreePanel({ sessions, onOpenSession, onClose }: Props) {
   const [removing, setRemoving] = useState<Set<string>>(new Set())
 
   const openCwds = new Set(sessions.map(s => s.cwd))
+  const sessionByCwd = new Map(sessions.map(s => [s.cwd, s]))
 
   // Only re-fetch when the set of cwds changes, not on every status update
   const cwdKey = [...new Set(sessions.map(s => s.cwd))].sort().join('|')
@@ -172,6 +173,7 @@ export function WorktreePanel({ sessions, onOpenSession, onClose }: Props) {
 
             {worktrees.map(wt => {
               const hasOpenSession = openCwds.has(wt.path)
+              const openSession = sessionByCwd.get(wt.path)
               const isRemoving = removing.has(wt.path)
               const confirmingThis = confirm?.worktreePath === wt.path
               const errorMsg = errors.get(wt.path)
@@ -191,12 +193,15 @@ export function WorktreePanel({ sessions, onOpenSession, onClose }: Props) {
                     </span>
                   </div>
 
-                  <div className={clsx(
-                    'text-[10px] text-[#555] ml-3 overflow-hidden text-ellipsis whitespace-nowrap',
-                    (confirmingThis || errorMsg) ? 'mb-1.5' : 'mb-0'
-                  )}>
+                  <div className="text-[10px] text-[#555] ml-3 overflow-hidden text-ellipsis whitespace-nowrap">
                     {shortenPath(wt.path)}
                   </div>
+                  {openSession && (
+                    <div className="text-[11px] text-[#888] ml-3 mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap">
+                      {openSession.aiTitle || openSession.label}
+                    </div>
+                  )}
+                  {(confirmingThis || errorMsg) && <div className="mb-1.5" />}
 
                   {errorMsg && !confirmingThis && (
                     <div className="text-[11px] text-red-400 ml-3 mb-1">{errorMsg}</div>
