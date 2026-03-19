@@ -95,7 +95,9 @@ export default function App() {
       }
     }
 
-    const sessionId = addSession(sessionCwd, resumeOpts?.firstPrompt, undefined, resumeOpts?.claudeSessionId, 'claude', opts.worktree)
+    const gitInfo = await window.electronAPI.getGitInfo(sessionCwd)
+    const isWorktree = gitInfo?.isWorktree || opts.worktree || false
+    const sessionId = addSession(sessionCwd, resumeOpts?.firstPrompt, undefined, resumeOpts?.claudeSessionId, 'claude', isWorktree)
     window.electronAPI.createSession(sessionId, sessionCwd, resumeOpts?.claudeSessionId, opts.skipPermissions, worktreeArg)
     return sessionId
   }

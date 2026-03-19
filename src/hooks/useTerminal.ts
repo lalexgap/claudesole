@@ -191,11 +191,16 @@ export function useTerminal(
     })
 
     const resizeObserver = new ResizeObserver(() => {
-      // Preserve scroll position across fit() — xterm resets to top on reflow
-      const wasAtBottom = term.buffer.active.viewportY >= term.buffer.active.baseY
+      // Preserve scroll position across fit() — xterm resets to top on reflow.
+      // Capture distance from bottom before resize, then restore after xterm's
+      // render cycle completes (rAF ensures the reflow has settled).
+      const distanceFromBottom = term.buffer.active.baseY - term.buffer.active.viewportY
       fitAddon.fit()
-      if (wasAtBottom) term.scrollToBottom()
       sendResize()
+      requestAnimationFrame(() => {
+        term.scrollToBottom()
+        if (distanceFromBottom > 0) term.scrollLines(-distanceFromBottom)
+      })
     })
     resizeObserver.observe(container)
 
