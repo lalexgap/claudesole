@@ -3,7 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { createSession, createShellSession, writeToSession, resizeSession, killSession } from './ptyManager'
 import { listClaudeSessions, latestSessionIdForCwd, latestSessionForCwd, getUsageForCwd, buildSummaryContext, invalidateSessionsCache } from './sessionManager'
-import { getGitInfo, listWorktrees, removeWorktree, listBranches, createWorktree } from './gitInfo'
+import { getGitInfo, listWorktrees, removeWorktree, listBranches, createWorktree, resolveWorktreeCwd } from './gitInfo'
 import { generateTitle, generateSummary, clearTitleCache, clearAllTitleCache } from './titleManager'
 import { ensureEmbeddings, semanticSearch, getIndexedCount, isEmbeddingAvailable } from './embeddingManager'
 import { getSettings, saveSettings } from './settingsManager'
@@ -96,7 +96,19 @@ function setupIpcHandlers() {
 
   ipcMain.on('pty:create', (_event, { sessionId, cwd, resumeSessionId, skipPermissions, worktree, forkSession }: { sessionId: string; cwd: string; resumeSessionId?: string; skipPermissions?: boolean; worktree?: boolean | string; forkSession?: boolean }) => {
     let validCwd: string
-    try { validCwd = validateDir(cwd) } catch { win?.webContents.send('pty:exit', { sessionId }); return }
+    try {
+      validCwd = validateDir(cwd)
+    } catch {
+      // cwd may be a deleted worktree — try to recreate it, or fall back to repo root
+      const resolved = resolveWorktreeCwd(cwd)
+      try {
+        if (!resolved) throw new Error('no repo root')
+        validCwd = validateDir(resolved)
+      } catch {
+        win?.webContents.send('pty:exit', { sessionId })
+        return
+      }
+    }
     createSession(sessionId, validCwd, resumeSessionId ?? null, skipPermissions ?? true, worktree ?? false, forkSession ?? false, (data) => {
       win?.webContents.send('pty:data', { sessionId, data })
     }, () => {
