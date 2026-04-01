@@ -109,9 +109,11 @@ function setupIpcHandlers() {
         return
       }
     }
+    console.log(`[pty:create] sessionId=${sessionId} cwd=${validCwd} resume=${resumeSessionId ?? 'none'}`)
     createSession(sessionId, validCwd, resumeSessionId ?? null, skipPermissions ?? true, worktree ?? false, forkSession ?? false, (data) => {
       win?.webContents.send('pty:data', { sessionId, data })
     }, () => {
+      console.log(`[pty:exit] sessionId=${sessionId}`)
       win?.webContents.send('pty:exit', { sessionId })
     })
   })

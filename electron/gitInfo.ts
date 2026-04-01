@@ -1,5 +1,6 @@
-import { execFileSync } from 'child_process'
+import { execFileSync, spawnSync } from 'child_process'
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
 
 export interface GitInfo {
@@ -81,7 +82,38 @@ export function createWorktree(repoPath: string, branch: string): string {
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'pipe'],
   })
+  runWorktreeCreateHooks(repoPath, worktreePath, branch)
   return worktreePath
+}
+
+function readHooksFromSettings(settingsPath: string): Array<{ command: string }> {
+  try {
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'))
+    const entries: Array<{ hooks?: Array<{ type: string; command: string }> }> = settings?.hooks?.WorktreeCreate ?? []
+    return entries.flatMap(e => (e.hooks ?? []).filter(h => h.type === 'command'))
+  } catch {
+    return []
+  }
+}
+
+function runWorktreeCreateHooks(repoPath: string, worktreePath: string, branch: string): void {
+  const settingsPaths = [
+    path.join(os.homedir(), '.claude', 'settings.json'),
+    path.join(repoPath, '.claude', 'settings.json'),
+  ]
+  const hooks = settingsPaths.flatMap(p => readHooksFromSettings(p))
+  if (hooks.length === 0) return
+
+  const input = JSON.stringify({ worktreePath, branch, repoPath })
+  for (const hook of hooks) {
+    spawnSync(hook.command, {
+      shell: true,
+      input,
+      cwd: worktreePath,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'inherit', 'inherit'],
+    })
+  }
 }
 
 export function listBranches(cwd: string): string[] {

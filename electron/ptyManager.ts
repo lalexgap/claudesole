@@ -61,7 +61,8 @@ export function createSession(
   }
 
   term.onData(onData)
-  term.onExit(() => {
+  term.onExit(({ exitCode, signal }) => {
+    console.log(`[pty] session ${sessionId} exited: code=${exitCode} signal=${signal}`)
     sessions.delete(sessionId)
     onExit()
   })
@@ -100,7 +101,8 @@ export function createShellSession(
     return
   }
   term.onData(onData)
-  term.onExit(() => {
+  term.onExit(({ exitCode, signal }) => {
+    console.log(`[pty] shell session ${sessionId} exited: code=${exitCode} signal=${signal}`)
     sessions.delete(sessionId)
     onExit()
   })

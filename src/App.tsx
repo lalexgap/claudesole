@@ -97,6 +97,16 @@ export default function App() {
 
     const gitInfo = await window.electronAPI.getGitInfo(sessionCwd)
     const isWorktree = gitInfo?.isWorktree || opts.worktree || false
+
+    // Dedup: after the await, atomically check if a concurrent call already created this session
+    if (resumeOpts?.claudeSessionId) {
+      const existing = useSessionsStore.getState().sessions.find(s => s.claudeSessionId === resumeOpts.claudeSessionId)
+      if (existing) {
+        setActive(existing.id)
+        return existing.id
+      }
+    }
+
     const sessionId = addSession(sessionCwd, resumeOpts?.firstPrompt, undefined, resumeOpts?.claudeSessionId, 'claude', isWorktree)
     window.electronAPI.createSession(sessionId, sessionCwd, resumeOpts?.claudeSessionId, opts.skipPermissions, worktreeArg)
     return sessionId
