@@ -9,7 +9,7 @@ import { PaneNode, splitLeaf, removeFromTree, getLeafIds, computeLayout, updateR
 import { QuickSwitcher } from './components/QuickSwitcher'
 import { WorktreePanel } from './components/WorktreePanel'
 import { SettingsPanel } from './components/SettingsPanel'
-import { ClaudeSession } from './types/ipc'
+import { ClaudeSession, CodexSession } from './types/ipc'
 
 export default function App() {
   const { sessions, activeId, addSession, removeSession, setActive, renameSession, togglePin, setAiTitle, clearAiTitle } = useSessionsStore()
@@ -72,9 +72,9 @@ export default function App() {
     if (sessions.length === 0) setShowModal(true)
   }, [])
 
-  // Dock badge — only Claude sessions (shell idle is not actionable)
+  // Dock badge — only Claude/Codex sessions (shell idle is not actionable)
   useEffect(() => {
-    const waiting = sessions.filter(s => s.type === 'claude' && s.status === 'waiting').length
+    const waiting = sessions.filter(s => (s.type === 'claude' || s.type === 'codex') && s.status === 'waiting').length
     window.electronAPI?.setBadgeCount?.(waiting)
   }, [sessions])
 
@@ -120,6 +120,45 @@ export default function App() {
 
   const handleNewInFolder = async (cwd: string, opts: SessionOpts) => {
     const sessionId = await startSession(cwd, opts)
+    closeModal()
+    if (pendingSplit && sessionId) handleSplitWithNew(sessionId)
+  }
+
+  const startCodexSession = async (cwd: string, opts: SessionOpts, resumeOpts?: { firstPrompt: string; codexSessionId: string; forkSession?: boolean }) => {
+    let sessionCwd = cwd
+    if (opts.worktree && opts.branch) {
+      try {
+        sessionCwd = await window.electronAPI.createWorktree(cwd, opts.branch)
+      } catch (err) {
+        alert(`Failed to create worktree: ${err instanceof Error ? err.message : err}`)
+        return ''
+      }
+    }
+
+    const gitInfo = await window.electronAPI.getGitInfo(sessionCwd)
+    const isWorktree = gitInfo?.isWorktree || opts.worktree || false
+
+    if (resumeOpts?.codexSessionId) {
+      const existing = useSessionsStore.getState().sessions.find(s => s.codexSessionId === resumeOpts.codexSessionId)
+      if (existing) {
+        setActive(existing.id)
+        return existing.id
+      }
+    }
+
+    const sessionId = addSession(sessionCwd, resumeOpts?.firstPrompt, undefined, undefined, 'codex', isWorktree, resumeOpts?.codexSessionId)
+    window.electronAPI.createCodexSession(sessionId, sessionCwd, resumeOpts?.codexSessionId, opts.skipPermissions, resumeOpts?.forkSession)
+    return sessionId
+  }
+
+  const handleResumeCodex = async (session: CodexSession, opts: SessionOpts) => {
+    const sessionId = await startCodexSession(session.cwd, opts, { firstPrompt: session.firstPrompt, codexSessionId: session.sessionId })
+    closeModal()
+    if (pendingSplit && sessionId) handleSplitWithNew(sessionId)
+  }
+
+  const handleNewCodexInFolder = async (cwd: string, opts: SessionOpts) => {
+    const sessionId = await startCodexSession(cwd, opts)
     closeModal()
     if (pendingSplit && sessionId) handleSplitWithNew(sessionId)
   }
@@ -298,25 +337,57 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [activeId, tabSessions, showModal, showHistory, showSwitcher, showWorktrees, handleCloseTab, toggleSettings])
 
-  // Generate AI titles for sessions that have just gone "waiting" (Claude responded)
+  // Generate AI titles for sessions that have just gone "waiting" (Claude responded).
+  // Re-generate every REGEN_INTERVAL so the title reflects the latest conversation.
   const titledSessionIds = useRef(new Set<string>())
+  const lastRegenerateRef = useRef<Record<string, number>>({})
+  const REGEN_INTERVAL_MS = 5 * 60 * 1000
+
   useEffect(() => {
     for (const session of sessions) {
-      if (session.type !== 'claude') continue
+      if (session.type !== 'claude' && session.type !== 'codex') continue
       if (session.status !== 'waiting') continue
       if (session.aiTitle) continue
-      if (!session.userHasTyped) continue
+      const prompt = session.firstPrompt
+      if (!prompt) continue
       if (titledSessionIds.current.has(session.id)) continue
       titledSessionIds.current.add(session.id)
-      const tabId = session.id
-      const prompt = session.firstPrompt
-      if (!prompt) continue;
+      const tabId = session.id;
       (async () => {
         const title = await window.electronAPI.generateSessionTitle(tabId, prompt)
-        if (title) setAiTitle(tabId, title)
+        if (title) {
+          setAiTitle(tabId, title)
+          lastRegenerateRef.current[tabId] = Date.now()
+        }
       })().catch(() => {})
     }
   }, [sessions, setAiTitle])
+
+  // Periodic refresh: re-generate titles using the latest prompt from disk.
+  useEffect(() => {
+    const tick = async () => {
+      const current = useSessionsStore.getState().sessions
+      for (const session of current) {
+        if (session.type !== 'claude' && session.type !== 'codex') continue
+        if (!session.firstPrompt) continue
+        const last = lastRegenerateRef.current[session.id] ?? 0
+        if (Date.now() - last < REGEN_INTERVAL_MS) continue
+        lastRegenerateRef.current[session.id] = Date.now()
+        try {
+          const target = session.claudeSessionId
+            ? await window.electronAPI.getSessionById(session.claudeSessionId)
+            : await window.electronAPI.getLatestSession(session.cwd)
+          const latestPrompt = target?.latestPrompt || undefined
+          await window.electronAPI.clearTitleCache(session.claudeSessionId ?? session.id)
+          await window.electronAPI.clearTitleCache(session.id)
+          const title = await window.electronAPI.generateSessionTitle(session.id, session.firstPrompt, latestPrompt)
+          if (title) setAiTitle(session.id, title)
+        } catch {}
+      }
+    }
+    const interval = setInterval(tick, 60 * 1000)
+    return () => clearInterval(interval)
+  }, [setAiTitle])
 
   const handleRegenerateTitle = useCallback(async (id: string) => {
     const session = sessions.find(s => s.id === id)
@@ -327,6 +398,7 @@ export default function App() {
     // Clear client-side state and re-arm the generation effect
     clearAiTitle(id)
     titledSessionIds.current.delete(id)
+    delete lastRegenerateRef.current[id]
   }, [sessions, clearAiTitle])
 
   return (
@@ -359,7 +431,7 @@ export default function App() {
       <div className="flex flex-1 overflow-hidden">
         {showSidebar && (
           <SessionSidebar
-            sessions={sessions.filter(s => s.type === 'claude')}
+            sessions={sessions.filter(s => s.type === 'claude' || s.type === 'codex')}
             activeId={activeId}
             onSelect={setActive}
             onClose={handleCloseTab}
@@ -461,7 +533,9 @@ export default function App() {
       {showModal && (
         <NewSessionModal
           onResume={handleResume}
+          onResumeCodex={handleResumeCodex}
           onNewInFolder={handleNewInFolder}
+          onNewCodexInFolder={handleNewCodexInFolder}
           onNewShell={handleNewShellInCwd}
           onShellBrowse={handleShellBrowse}
           onClose={closeModal}

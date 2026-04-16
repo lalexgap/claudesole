@@ -28,6 +28,7 @@ export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename,
   const inputRef = useRef<HTMLInputElement>(null)
 
   const isShell = session.type === 'shell'
+  const isCodex = session.type === 'codex'
   const isRunning = session.status === 'running'
 
   const startEdit = () => {
@@ -54,20 +55,28 @@ export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename,
     // Shell idle
     'bg-slate-500/[0.18]': isShell && !isRunning && isActive,
     'bg-slate-500/[0.10]': isShell && !isRunning && !isActive,
+    // Codex running
+    'bg-purple-400/[0.18]': isCodex && isRunning && isActive,
+    'bg-purple-400/[0.13]': isCodex && isRunning && !isActive,
+    // Codex waiting
+    'bg-orange-400/[0.18]': isCodex && !isRunning && isActive,
+    'bg-orange-400/[0.13]': isCodex && !isRunning && !isActive,
     // Claude running
-    'bg-green-400/[0.18]': !isShell && isRunning && isActive,
-    'bg-green-400/[0.13]': !isShell && isRunning && !isActive,
+    'bg-green-400/[0.18]': !isShell && !isCodex && isRunning && isActive,
+    'bg-green-400/[0.13]': !isShell && !isCodex && isRunning && !isActive,
     // Claude waiting
-    'bg-red-400/[0.18]': !isShell && !isRunning && isActive,
-    'bg-red-400/[0.13]': !isShell && !isRunning && !isActive,
+    'bg-red-400/[0.18]': !isShell && !isCodex && !isRunning && isActive,
+    'bg-red-400/[0.13]': !isShell && !isCodex && !isRunning && !isActive,
   })
 
   const borderCls = isActive
     ? clsx({
         'border-blue-400/[0.35]': isShell && isRunning,
         'border-slate-500/[0.35]': isShell && !isRunning,
-        'border-green-400/[0.35]': !isShell && isRunning,
-        'border-red-400/[0.35]': !isShell && !isRunning,
+        'border-purple-400/[0.35]': isCodex && isRunning,
+        'border-orange-400/[0.35]': isCodex && !isRunning,
+        'border-green-400/[0.35]': !isShell && !isCodex && isRunning,
+        'border-red-400/[0.35]': !isShell && !isCodex && !isRunning,
       })
     : 'border-transparent'
 

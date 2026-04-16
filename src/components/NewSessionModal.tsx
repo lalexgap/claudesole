@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import clsx from 'clsx'
-import { ClaudeSession } from '../types/ipc'
+import { ClaudeSession, CodexSession } from '../types/ipc'
 
 function relativeTime(ms: number): string {
   const diff = Date.now() - ms
@@ -14,8 +14,11 @@ function relativeTime(ms: number): string {
 
 type Item =
   | { type: 'session'; session: ClaudeSession }
+  | { type: 'codexSession'; session: CodexSession }
   | { type: 'folder'; cwd: string }
+  | { type: 'codexFolder'; cwd: string }
   | { type: 'browse' }
+  | { type: 'codexBrowse' }
   | { type: 'shellFolder'; cwd: string }
   | { type: 'shellBrowse' }
 
@@ -23,22 +26,26 @@ export interface SessionOpts { skipPermissions: boolean; worktree: boolean; bran
 
 interface Props {
   onResume: (session: ClaudeSession, opts: SessionOpts) => void
+  onResumeCodex: (session: CodexSession, opts: SessionOpts) => void
   onNewInFolder: (cwd: string, opts: SessionOpts) => void
+  onNewCodexInFolder: (cwd: string, opts: SessionOpts) => void
   onNewShell: (cwd: string) => void
   onShellBrowse: () => void
   onClose: () => void
 }
 
-export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBrowse, onClose }: Props) {
+export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewCodexInFolder, onNewShell, onShellBrowse, onClose }: Props) {
   const [sessions, setSessions] = useState<ClaudeSession[]>([])
+  const [codexSessions, setCodexSessions] = useState<CodexSession[]>([])
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
-  const [hoveredSession, setHoveredSession] = useState<ClaudeSession | null>(null)
+  const [hoveredSession, setHoveredSession] = useState<ClaudeSession | CodexSession | null>(null)
   const [skipPermissions, setSkipPermissions] = useState(true)
   const [summaries, setSummaries] = useState<Record<string, string>>({})
 
   const [step, setStep] = useState<'pick' | 'options'>('pick')
   const [pendingCwd, setPendingCwd] = useState<string | null>(null)
+  const [pendingType, setPendingType] = useState<'claude' | 'codex'>('claude')
   const [worktree, setWorktree] = useState(false)
   const [branchSearch, setBranchSearch] = useState('')
   const [branch, setBranch] = useState('')
@@ -54,6 +61,7 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
     window.electronAPI.listSessions().then(all =>
       setSessions(all.filter(s => !s.cwd.includes('/.claude/worktrees/')))
     ).catch(() => {})
+    window.electronAPI.listCodexSessions().then(all => setCodexSessions(all)).catch(() => {})
   }, [])
 
   const q = query.toLowerCase()
@@ -67,17 +75,33 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
     (s.title || '').toLowerCase().includes(q)
   ), [sessions, q])
 
+  const filteredCodexSessions = useMemo(() => codexSessions.filter(s =>
+    !q ||
+    s.projectName.toLowerCase().includes(q) ||
+    s.slug.toLowerCase().includes(q) ||
+    s.cwd.toLowerCase().includes(q) ||
+    s.firstPrompt.toLowerCase().includes(q) ||
+    (s.title || '').toLowerCase().includes(q)
+  ), [codexSessions, q])
+
   const recentFolders = useMemo(() => [...new Set(sessions.map(s => s.cwd))]
     .filter(cwd => !q || cwd.toLowerCase().includes(q))
     .slice(0, 3), [sessions, q])
 
+  const recentCodexFolders = useMemo(() => [...new Set(codexSessions.map(s => s.cwd))]
+    .filter(cwd => !q || cwd.toLowerCase().includes(q))
+    .slice(0, 3), [codexSessions, q])
+
   const items: Item[] = useMemo(() => [
     ...filteredSessions.map(s => ({ type: 'session' as const, session: s })),
+    ...filteredCodexSessions.map(s => ({ type: 'codexSession' as const, session: s })),
     ...recentFolders.map(cwd => ({ type: 'folder' as const, cwd })),
     { type: 'browse' },
+    ...recentCodexFolders.map(cwd => ({ type: 'codexFolder' as const, cwd })),
+    { type: 'codexBrowse' },
     ...recentFolders.map(cwd => ({ type: 'shellFolder' as const, cwd })),
     { type: 'shellBrowse' },
-  ], [filteredSessions, recentFolders])
+  ], [filteredSessions, filteredCodexSessions, recentFolders, recentCodexFolders])
 
   useEffect(() => { setSelected(0) }, [query])
 
@@ -85,14 +109,19 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
     itemRefs.current.get(selected)?.scrollIntoView({ block: 'nearest' })
   }, [selected])
 
-  const activeSession: ClaudeSession | null =
+  const activeSession: ClaudeSession | CodexSession | null =
     hoveredSession ??
-    (selected < filteredSessions.length ? filteredSessions[selected] : null)
+    (selected < filteredSessions.length
+      ? filteredSessions[selected]
+      : selected < filteredSessions.length + filteredCodexSessions.length
+        ? filteredCodexSessions[selected - filteredSessions.length]
+        : null)
 
   useEffect(() => {
     if (!activeSession || !activeSession.firstPrompt) return
     const id = activeSession.sessionId
-    if (summaries[id] || activeSession.summary) return
+    const hasCachedSummary = 'summary' in activeSession ? !!activeSession.summary : false
+    if (summaries[id] || hasCachedSummary) return
     window.electronAPI.generateSessionSummary(id, activeSession.firstPrompt, activeSession.latestPrompt || undefined)
       .then(s => { if (s) setSummaries(prev => ({ ...prev, [id]: s })) })
       .catch(() => {})
@@ -118,13 +147,14 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
     branchListRef.current?.children[branchIdx]?.scrollIntoView({ block: 'nearest' })
   }, [branchIdx])
 
-  const goToOptions = async (cwd?: string) => {
+  const goToOptions = async (cwd?: string, type: 'claude' | 'codex' = 'claude') => {
     let target = cwd
     if (!target) {
       target = await window.electronAPI.openDirectory() ?? undefined
       if (!target) return
     }
     setPendingCwd(target)
+    setPendingType(type)
     setWorktree(false)
     setBranchSearch('')
     setBranch('')
@@ -135,8 +165,10 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
 
   const handleStart = useCallback(() => {
     if (!pendingCwd) return
-    onNewInFolder(pendingCwd, { skipPermissions, worktree, branch: worktree && branch ? branch : undefined })
-  }, [pendingCwd, skipPermissions, worktree, branch, onNewInFolder])
+    const opts = { skipPermissions, worktree, branch: worktree && branch ? branch : undefined }
+    if (pendingType === 'codex') onNewCodexInFolder(pendingCwd, opts)
+    else onNewInFolder(pendingCwd, opts)
+  }, [pendingCwd, pendingType, skipPermissions, worktree, branch, onNewInFolder, onNewCodexInFolder])
 
   const cycleSection = useCallback((reverse: boolean) => {
     const fOffset = filteredSessions.length
@@ -157,11 +189,14 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
 
   const activate = useCallback((item: Item) => {
     if (item.type === 'session') onResume(item.session, { skipPermissions, worktree: false })
-    else if (item.type === 'folder') goToOptions(item.cwd)
-    else if (item.type === 'browse') goToOptions()
+    else if (item.type === 'codexSession') onResumeCodex(item.session, { skipPermissions, worktree: false })
+    else if (item.type === 'folder') goToOptions(item.cwd, 'claude')
+    else if (item.type === 'browse') goToOptions(undefined, 'claude')
+    else if (item.type === 'codexFolder') goToOptions(item.cwd, 'codex')
+    else if (item.type === 'codexBrowse') goToOptions(undefined, 'codex')
     else if (item.type === 'shellFolder') onNewShell(item.cwd)
     else onShellBrowse()
-  }, [onResume, onNewShell, onShellBrowse, skipPermissions])
+  }, [onResume, onResumeCodex, onNewShell, onShellBrowse, skipPermissions])
 
   useEffect(() => {
     if (step !== 'pick') return
@@ -193,9 +228,12 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
   }, [step, branchOpen, branchIdx, filteredBranches, handleStart])
 
   const sessionOffset = 0
-  const folderOffset = filteredSessions.length
+  const codexSessionOffset = filteredSessions.length
+  const folderOffset = codexSessionOffset + filteredCodexSessions.length
   const browseOffset = folderOffset + recentFolders.length
-  const shellFolderOffset = browseOffset + 1
+  const codexFolderOffset = browseOffset + 1
+  const codexBrowseOffset = codexFolderOffset + recentCodexFolders.length
+  const shellFolderOffset = codexBrowseOffset + 1
   const shellBrowseOffset = shellFolderOffset + recentFolders.length
 
   const rowCls = (idx: number) => clsx(
@@ -211,17 +249,10 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
   }
 
   return (
-    <div
-      onClick={onClose}
-      className="fixed inset-0 bg-black/65 flex items-start justify-center pt-20 z-[1000]"
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        className="flex h-[520px] bg-app-750 rounded-xl border border-app-450 shadow-[0_24px_64px_rgba(0,0,0,0.6)] overflow-hidden"
-      >
+    <div className="fixed inset-0 bg-app-750 flex z-[1000]">
         {step === 'pick' ? (
           /* ── Step 1: Session / folder picker ── */
-          <div className="w-[360px] flex flex-col">
+          <div className="w-[360px] flex flex-col border-r border-app-550">
             <div className="shrink-0 border-b border-app-550">
               <div className="px-3.5 pt-3 pb-2.5">
                 <input
@@ -279,7 +310,40 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
                   ))}
                 </>
               )}
-              {filteredSessions.length === 0 && (
+              {filteredCodexSessions.length > 0 && (
+                <>
+                  <SectionLabel>Resume Codex session</SectionLabel>
+                  {filteredCodexSessions.map((session, i) => (
+                    <div
+                      key={session.sessionId}
+                      ref={el => { if (el) itemRefs.current.set(codexSessionOffset + i, el); else itemRefs.current.delete(codexSessionOffset + i) }}
+                      className={rowCls(codexSessionOffset + i)}
+                      onClick={() => onResumeCodex(session, { skipPermissions, worktree: false })}
+                      onMouseEnter={() => { setSelected(codexSessionOffset + i); setHoveredSession(session) }}
+                      onMouseLeave={() => setHoveredSession(null)}
+                    >
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-purple-400 text-[10px] font-mono shrink-0">[cx]</span>
+                        <span className="text-neutral-300 font-medium text-[13px] overflow-hidden text-ellipsis whitespace-nowrap">
+                          {session.title || session.slug || session.projectName}
+                        </span>
+                        <span className="text-[#666] text-[11px] ml-auto shrink-0">
+                          {relativeTime(session.lastActivity)}
+                        </span>
+                      </div>
+                      <div className="text-[#777] text-[11px] mt-px overflow-hidden text-ellipsis whitespace-nowrap">
+                        {session.projectName}{session.slug ? ` · ${session.cwd}` : ''}
+                      </div>
+                      {(session.latestPrompt || session.firstPrompt) && (
+                        <div className="text-[#888] text-[11px] leading-[1.5] mt-[3px] line-clamp-2">
+                          {session.latestPrompt || session.firstPrompt}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </>
+              )}
+              {filteredSessions.length === 0 && filteredCodexSessions.length === 0 && (
                 <div className="p-4 text-[#555] text-xs">
                   {query ? 'No matching sessions' : 'No recent sessions found'}
                 </div>
@@ -315,6 +379,34 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
                 <span className="text-[#888] text-xs">Browse for folder…</span>
               </div>
 
+              <SectionLabel style={{ paddingTop: '4px', paddingBottom: '2px' }}>New Codex session</SectionLabel>
+              {recentCodexFolders.map((cwd, i) => (
+                <div
+                  key={cwd}
+                  ref={el => { if (el) itemRefs.current.set(codexFolderOffset + i, el); else itemRefs.current.delete(codexFolderOffset + i) }}
+                  className={clsx(rowCls(codexFolderOffset + i), 'flex items-center gap-2 !py-[5px]')}
+                  onClick={() => goToOptions(cwd, 'codex')}
+                  onMouseEnter={() => { setSelected(codexFolderOffset + i); setHoveredSession(null) }}
+                >
+                  <span className="text-purple-400 text-[11px] shrink-0">+</span>
+                  <span className="text-neutral-300 text-xs overflow-hidden text-ellipsis whitespace-nowrap flex-1">
+                    {cwd.split('/').pop()}
+                  </span>
+                  <span className="text-[#555] text-[10px] shrink-0 overflow-hidden text-ellipsis whitespace-nowrap max-w-[120px]">
+                    {shortenParent(cwd)}
+                  </span>
+                </div>
+              ))}
+              <div
+                ref={el => { if (el) itemRefs.current.set(codexBrowseOffset, el); else itemRefs.current.delete(codexBrowseOffset) }}
+                className={clsx(rowCls(codexBrowseOffset), 'flex items-center gap-2 !py-[5px] !mb-0.5')}
+                onClick={() => goToOptions(undefined, 'codex')}
+                onMouseEnter={() => { setSelected(codexBrowseOffset); setHoveredSession(null) }}
+              >
+                <span className="text-[#555] text-xs">⊕</span>
+                <span className="text-[#888] text-xs">Codex in folder…</span>
+              </div>
+
               <SectionLabel style={{ paddingTop: '4px', paddingBottom: '2px' }}>New shell</SectionLabel>
               {recentFolders.map((cwd, i) => (
                 <div
@@ -346,7 +438,7 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
           </div>
         ) : (
           /* ── Step 2: New session options ── */
-          <div className="w-[360px] flex flex-col">
+          <div className="w-[360px] flex flex-col border-r border-app-550">
             <div className="shrink-0 border-b border-app-550 px-3.5 py-3">
               <button
                 onClick={() => setStep('pick')}
@@ -358,7 +450,9 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
 
             <div className="flex-1 px-4 py-5 flex flex-col gap-5">
               <div>
-                <div className="text-[#666] text-[10px] font-semibold uppercase tracking-[0.08em] mb-1.5">New session in</div>
+                <div className="text-[#666] text-[10px] font-semibold uppercase tracking-[0.08em] mb-1.5">
+                  New {pendingType === 'codex' ? 'Codex' : 'Claude'} session in
+                </div>
                 <div className="text-neutral-200 text-[13px] font-medium">{pendingCwd?.split('/').pop()}</div>
                 <div className="text-[#555] text-[11px] mt-[3px] overflow-hidden text-ellipsis whitespace-nowrap">{pendingCwd}</div>
               </div>
@@ -371,7 +465,9 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
                     onChange={e => setSkipPermissions(e.target.checked)}
                     className="accent-green-400 cursor-pointer"
                   />
-                  <span className="text-[#777] text-[11px]">--dangerously-skip-permissions</span>
+                  <span className="text-[#777] text-[11px]">
+                    {pendingType === 'codex' ? '--dangerously-bypass-approvals-and-sandbox' : '--dangerously-skip-permissions'}
+                  </span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -432,7 +528,7 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
         )}
 
         {/* Right panel */}
-        <div className="w-[280px] p-4 flex flex-col gap-3 overflow-y-auto border-l border-app-550">
+        <div className="flex-1 p-4 flex flex-col gap-3 overflow-y-auto max-w-2xl">
           {step === 'pick' ? (
             <>
               {!activeSession && (
@@ -496,7 +592,6 @@ export function NewSessionModal({ onResume, onNewInFolder, onNewShell, onShellBr
             </>
           )}
         </div>
-      </div>
     </div>
   )
 }

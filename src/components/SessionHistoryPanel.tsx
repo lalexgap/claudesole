@@ -77,17 +77,27 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
 
   useEffect(() => {
     searchRef.current?.focus()
+    let cancelled = false
     window.electronAPI.listSessions().then(all => {
+      if (cancelled) return
       setSessions(all)
-      // Fire async title generation for up to 20 uncached sessions
-      const uncached = all.filter(s => !s.title && (s.firstPrompt || s.latestPrompt)).slice(0, 20)
-      for (const s of uncached) {
-        window.electronAPI.generateSessionTitle(s.sessionId, s.firstPrompt, s.latestPrompt || undefined)
-          .then(title => {
-            if (title) setSessions(prev => prev.map(p => p.sessionId === s.sessionId ? { ...p, title } : p))
-          })
-          .catch(() => {})
+      // Generate titles for every uncached session, with bounded concurrency so
+      // we don't fire hundreds of simultaneous AI calls.
+      const uncached = all.filter(s => !s.title && (s.firstPrompt || s.latestPrompt))
+      const CONCURRENCY = 4
+      let idx = 0
+      const worker = async () => {
+        while (!cancelled && idx < uncached.length) {
+          const s = uncached[idx++]
+          try {
+            const title = await window.electronAPI.generateSessionTitle(s.sessionId, s.firstPrompt, s.latestPrompt || undefined)
+            if (!cancelled && title) {
+              setSessions(prev => prev.map(p => p.sessionId === s.sessionId ? { ...p, title } : p))
+            }
+          } catch {}
+        }
       }
+      Array.from({ length: CONCURRENCY }, worker)
       // Check if semantic search is available and kick off background indexing
       window.electronAPI.embeddingsAvailable()
         .then(available => {
@@ -98,6 +108,7 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
         })
         .catch(() => {})
     }).catch(() => {})
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {

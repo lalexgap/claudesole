@@ -4,6 +4,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createSession: (sessionId: string, cwd: string, resumeSessionId?: string, skipPermissions?: boolean, worktree?: boolean | string, forkSession?: boolean) =>
     ipcRenderer.send('pty:create', { sessionId, cwd, resumeSessionId, skipPermissions, worktree, forkSession }),
 
+  createCodexSession: (sessionId: string, cwd: string, resumeSessionId?: string, skipPermissions?: boolean, forkSession?: boolean) =>
+    ipcRenderer.send('pty:createCodex', { sessionId, cwd, resumeSessionId, skipPermissions, forkSession }),
+
   createShellSession: (sessionId: string, cwd: string) =>
     ipcRenderer.send('pty:createShell', { sessionId, cwd }),
 
@@ -23,6 +26,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('dialog:openDirectory'),
 
   listSessions: () => ipcRenderer.invoke('sessions:list'),
+  listCodexSessions: () => ipcRenderer.invoke('sessions:listCodex'),
 
   onData: (callback: (sessionId: string, data: string) => void) => {
     const handler = (_: Electron.IpcRendererEvent, { sessionId, data }: { sessionId: string; data: string }) =>
@@ -70,6 +74,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   getLatestSession: (cwd: string) =>
     ipcRenderer.invoke('sessions:latestSession', cwd),
+
+  getSessionById: (sessionId: string) =>
+    ipcRenderer.invoke('sessions:byId', sessionId),
 
   generateSessionTitle: (sessionId: string, firstPrompt: string, latestPrompt?: string): Promise<string | null> =>
     ipcRenderer.invoke('title:generate', { sessionId, firstPrompt, latestPrompt }),

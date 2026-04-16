@@ -10,8 +10,9 @@ export interface Session {
   status: SessionStatus
   firstPrompt: string
   pinned: boolean
-  type: 'claude' | 'shell'
+  type: 'claude' | 'codex' | 'shell'
   claudeSessionId?: string // the Claude-assigned session UUID (known for resumed sessions)
+  codexSessionId?: string // the Codex-assigned session UUID (known for resumed sessions)
   isWorktree?: boolean
   aiTitle?: string
   userHasTyped?: boolean  // true once the user has sent input in this tab session
@@ -20,7 +21,7 @@ export interface Session {
 interface SessionsState {
   sessions: Session[]
   activeId: string | null
-  addSession: (cwd: string, firstPrompt?: string, label?: string, claudeSessionId?: string, type?: 'claude' | 'shell', isWorktree?: boolean) => string
+  addSession: (cwd: string, firstPrompt?: string, label?: string, claudeSessionId?: string, type?: 'claude' | 'codex' | 'shell', isWorktree?: boolean, codexSessionId?: string) => string
   removeSession: (id: string) => void
   setActive: (id: string) => void
   markRunning: (id: string) => void
@@ -38,10 +39,10 @@ export const useSessionsStore = create<SessionsState>((set) => ({
   sessions: [],
   activeId: null,
 
-  addSession: (cwd: string, firstPrompt = '', label?: string, claudeSessionId?: string, type: 'claude' | 'shell' = 'claude', isWorktree?: boolean) => {
+  addSession: (cwd: string, firstPrompt = '', label?: string, claudeSessionId?: string, type: 'claude' | 'codex' | 'shell' = 'claude', isWorktree?: boolean, codexSessionId?: string) => {
     const id = nanoid()
     const sessionLabel = label || cwd.split('/').pop() || cwd
-    const session: Session = { id, cwd, label: sessionLabel, status: 'running', firstPrompt, pinned: false, type, claudeSessionId, isWorktree }
+    const session: Session = { id, cwd, label: sessionLabel, status: 'running', firstPrompt, pinned: false, type, claudeSessionId, codexSessionId, isWorktree }
     set((state) => ({ sessions: [...state.sessions, session], activeId: id }))
     return id
   },

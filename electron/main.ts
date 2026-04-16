@@ -1,8 +1,8 @@
 import { app, BrowserWindow, ipcMain, dialog, session, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import { createSession, createShellSession, writeToSession, resizeSession, killSession } from './ptyManager'
-import { listClaudeSessions, latestSessionIdForCwd, latestSessionForCwd, getUsageForCwd, buildSummaryContext, invalidateSessionsCache } from './sessionManager'
+import { createSession, createShellSession, createCodexSession, writeToSession, resizeSession, killSession } from './ptyManager'
+import { listClaudeSessions, listCodexSessions, latestSessionIdForCwd, latestSessionForCwd, sessionById, getUsageForCwd, buildSummaryContext, invalidateSessionsCache } from './sessionManager'
 import { getGitInfo, listWorktrees, removeWorktree, listBranches, createWorktree, resolveWorktreeCwd } from './gitInfo'
 import { generateTitle, generateSummary, clearTitleCache, clearAllTitleCache } from './titleManager'
 import { ensureEmbeddings, semanticSearch, getIndexedCount, isEmbeddingAvailable } from './embeddingManager'
@@ -55,6 +55,7 @@ let win: BrowserWindow | null = null
 
 function setupIpcHandlers() {
   ipcMain.handle('sessions:list', () => listClaudeSessions())
+  ipcMain.handle('sessions:listCodex', () => listCodexSessions())
 
   ipcMain.handle('sessions:latestForCwd', (_event, cwd: string) => latestSessionIdForCwd(cwd))
   ipcMain.handle('sessions:latestSession', (_event, cwd: string) => {
@@ -63,6 +64,8 @@ function setupIpcHandlers() {
     invalidateSessionsCache()
     return latestSessionForCwd(cwd)
   })
+
+  ipcMain.handle('sessions:byId', (_event, sessionId: string) => sessionById(sessionId))
 
   ipcMain.handle('sessions:getUsage', (_event, cwd: string) => getUsageForCwd(cwd))
 
@@ -114,6 +117,29 @@ function setupIpcHandlers() {
       win?.webContents.send('pty:data', { sessionId, data })
     }, () => {
       console.log(`[pty:exit] sessionId=${sessionId}`)
+      win?.webContents.send('pty:exit', { sessionId })
+    })
+  })
+
+  ipcMain.on('pty:createCodex', (_event, { sessionId, cwd, resumeSessionId, skipPermissions, forkSession }: { sessionId: string; cwd: string; resumeSessionId?: string; skipPermissions?: boolean; forkSession?: boolean }) => {
+    let validCwd: string
+    try {
+      validCwd = validateDir(cwd)
+    } catch {
+      const resolved = resolveWorktreeCwd(cwd)
+      try {
+        if (!resolved) throw new Error('no repo root')
+        validCwd = validateDir(resolved)
+      } catch {
+        win?.webContents.send('pty:exit', { sessionId })
+        return
+      }
+    }
+    console.log(`[pty:createCodex] sessionId=${sessionId} cwd=${validCwd} resume=${resumeSessionId ?? 'none'}`)
+    createCodexSession(sessionId, validCwd, resumeSessionId ?? null, skipPermissions ?? true, forkSession ?? false, (data) => {
+      win?.webContents.send('pty:data', { sessionId, data })
+    }, () => {
+      console.log(`[pty:exit] codex sessionId=${sessionId}`)
       win?.webContents.send('pty:exit', { sessionId })
     })
   })
@@ -225,9 +251,14 @@ function createWindow() {
   })
 
   // Keyboard shortcut Cmd+T for new session (sent to renderer)
-  win.webContents.on('before-input-event', (_event, input) => {
+  win.webContents.on('before-input-event', (event, input) => {
     if (input.meta && input.key === 't' && input.type === 'keyDown') {
       win?.webContents.send('shortcut:newSession')
+    }
+    // Block Cmd+R / Cmd+Shift+R — a reload wipes the renderer state (tabs,
+    // store, xterm buffers) even though PTYs in the main process survive.
+    if (input.meta && (input.key === 'r' || input.key === 'R') && input.type === 'keyDown') {
+      event.preventDefault()
     }
   })
 }

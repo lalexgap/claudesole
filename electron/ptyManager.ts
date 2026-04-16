@@ -1,5 +1,6 @@
 import * as pty from 'node-pty'
 import { execFileSync } from 'child_process'
+import fs from 'fs'
 
 type IPty = pty.IPty
 
@@ -103,6 +104,61 @@ export function createShellSession(
   term.onData(onData)
   term.onExit(({ exitCode, signal }) => {
     console.log(`[pty] shell session ${sessionId} exited: code=${exitCode} signal=${signal}`)
+    sessions.delete(sessionId)
+    onExit()
+  })
+  sessions.set(sessionId, term)
+}
+
+// Codex ships as a native binary inside the macOS app bundle. When invoked via
+// the npm wrapper, it may fail if the optional native package is not installed.
+// Check known locations in priority order before falling back to PATH lookup.
+function resolveCodexBinary(): string {
+  const candidates = [
+    '/Applications/Codex.app/Contents/Resources/codex',
+  ]
+  for (const p of candidates) {
+    try { if (fs.statSync(p).isFile()) return p } catch {}
+  }
+  return 'codex'
+}
+
+export function createCodexSession(
+  sessionId: string,
+  cwd: string,
+  resumeSessionId: string | null,
+  skipPermissions: boolean,
+  forkSession: boolean,
+  onData: (data: string) => void,
+  onExit: () => void
+) {
+  const skipFlag = '--dangerously-bypass-approvals-and-sandbox'
+  let args: string[]
+  if (forkSession && resumeSessionId) {
+    args = ['fork', resumeSessionId, ...(skipPermissions ? [skipFlag] : [])]
+  } else if (resumeSessionId) {
+    args = ['resume', resumeSessionId, ...(skipPermissions ? [skipFlag] : [])]
+  } else {
+    args = skipPermissions ? [skipFlag] : []
+  }
+  const codexBin = resolveCodexBinary()
+  let term: IPty
+  try {
+    term = pty.spawn(codexBin, args, {
+      name: 'xterm-256color',
+      cols: 80,
+      rows: 24,
+      cwd,
+      env: getEnv(),
+    })
+  } catch (err) {
+    console.error('[ptyManager] codex spawn failed:', err)
+    onExit()
+    return
+  }
+  term.onData(onData)
+  term.onExit(({ exitCode, signal }) => {
+    console.log(`[pty] codex session ${sessionId} exited: code=${exitCode} signal=${signal}`)
     sessions.delete(sessionId)
     onExit()
   })

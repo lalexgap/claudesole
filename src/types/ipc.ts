@@ -12,6 +12,18 @@ export interface Worktree {
   repoRoot: string
 }
 
+export interface CodexSession {
+  sessionId: string
+  cwd: string
+  projectName: string
+  slug: string
+  lastActivity: number
+  firstPrompt: string
+  latestPrompt: string
+  model?: string
+  title?: string
+}
+
 export interface ClaudeSession {
   sessionId: string
   cwd: string
@@ -28,6 +40,7 @@ export interface ClaudeSession {
 
 export interface ElectronAPI {
   createSession: (sessionId: string, cwd: string, resumeSessionId?: string, skipPermissions?: boolean, worktree?: boolean | string, forkSession?: boolean) => void
+  createCodexSession: (sessionId: string, cwd: string, resumeSessionId?: string, skipPermissions?: boolean, forkSession?: boolean) => void
   createShellSession: (sessionId: string, cwd: string) => void
   latestSessionForCwd: (cwd: string) => Promise<string | null>
   writeSession: (sessionId: string, data: string) => void
@@ -35,6 +48,7 @@ export interface ElectronAPI {
   killSession: (sessionId: string) => void
   openDirectory: () => Promise<string | null>
   listSessions: () => Promise<ClaudeSession[]>
+  listCodexSessions: () => Promise<CodexSession[]>
   onData: (callback: (sessionId: string, data: string) => void) => () => void
   onExit: (callback: (sessionId: string) => void) => () => void
   onShortcutNewSession: (callback: () => void) => () => void
@@ -47,6 +61,7 @@ export interface ElectronAPI {
   createWorktree: (repoPath: string, branch: string) => Promise<string>
   openExternal: (url: string) => void
   getLatestSession: (cwd: string) => Promise<ClaudeSession | null>
+  getSessionById: (sessionId: string) => Promise<ClaudeSession | null>
   generateSessionTitle: (sessionId: string, firstPrompt: string, latestPrompt?: string) => Promise<string | null>
   generateSessionSummary: (sessionId: string, firstPrompt: string, latestPrompt?: string) => Promise<string | null>
   clearTitleCache: (sessionId: string) => Promise<void>
