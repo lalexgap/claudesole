@@ -78,8 +78,8 @@ export function TabBar({
   )
 
   const toolbarBtnCls = (isOpen: boolean) => clsx(
-    'border-0 cursor-pointer px-1.5 py-[3px] rounded shrink-0 leading-none text-xs',
-    isOpen ? 'bg-white/[0.08] text-[#bbb]' : 'bg-transparent text-[#555]'
+    'border-0 cursor-pointer px-2 py-1 rounded shrink-0 leading-none text-base',
+    isOpen ? 'bg-white/[0.10] text-neutral-100' : 'bg-transparent text-[#999] hover:text-neutral-200'
   )
 
   return (
@@ -119,7 +119,7 @@ export function TabBar({
 
       <button
         onClick={onNewTab}
-        className="bg-transparent border-0 text-[#666] text-xl leading-none cursor-pointer px-2 rounded shrink-0"
+        className="bg-transparent border-0 text-[#999] hover:text-neutral-100 text-2xl leading-none cursor-pointer px-2 rounded shrink-0"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         title="New session (⌘T)"
       >
@@ -128,7 +128,7 @@ export function TabBar({
 
       <button
         onClick={onNewShellTab}
-        className="bg-transparent border-0 text-[#555] text-[11px] font-mono leading-none cursor-pointer px-1.5 py-0.5 rounded shrink-0"
+        className="bg-transparent border-0 text-[#999] hover:text-neutral-100 text-[13px] font-mono leading-none cursor-pointer px-2 py-1 rounded shrink-0"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         title="New shell tab"
       >

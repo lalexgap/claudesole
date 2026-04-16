@@ -200,6 +200,64 @@ export default function App() {
   }, [sessions, paneRoots, removeSession])
 
   const [pendingSplit, setPendingSplit] = useState<{ sourceId: string; dir: 'h' | 'v' } | null>(null)
+  const [paneCtxMenu, setPaneCtxMenu] = useState<{ x: number; y: number; paneId: string } | null>(null)
+
+  const handlePaneContextMenu = (e: React.MouseEvent, paneId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setPaneCtxMenu({ x: e.clientX, y: e.clientY, paneId })
+  }
+
+  // Close a single pane within a split (or fall through to the regular tab
+  // close for a non-split session). If the primary of a split is closed, a
+  // remaining leaf is promoted to primary so the split tree stays intact.
+  const handleClosePane = (paneId: string) => {
+    let primaryId: string | null = null
+    for (const [pid, root] of paneRoots) {
+      if (getLeafIds(root).includes(paneId)) { primaryId = pid; break }
+    }
+    if (!primaryId) { handleCloseTab(paneId); return }
+
+    const session = sessions.find(s => s.id === paneId)
+    if (session?.status === 'running') {
+      const ok = window.confirm(`Close "${session.label}"? Claude may still be running.`)
+      if (!ok) return
+    }
+
+    const root = paneRoots.get(primaryId)
+    const newRoot = root ? removeFromTree(root, paneId) : null
+    const closingPrimary = paneId === primaryId
+
+    if (!newRoot || newRoot.type === 'leaf') {
+      setPaneRoots(prev => { const m = new Map(prev); m.delete(primaryId!); return m })
+      setFocusedPanes(prev => { const m = new Map(prev); m.delete(primaryId!); return m })
+      if (closingPrimary && newRoot?.type === 'leaf') setActive(newRoot.sessionId)
+    } else if (closingPrimary) {
+      // Primary got closed but split survives — promote leftmost remaining leaf.
+      const newPrimaryId = getLeafIds(newRoot)[0]
+      setPaneRoots(prev => {
+        const m = new Map(prev)
+        m.delete(primaryId!)
+        m.set(newPrimaryId, newRoot)
+        return m
+      })
+      setFocusedPanes(prev => {
+        const m = new Map(prev)
+        m.delete(primaryId!)
+        m.set(newPrimaryId, newPrimaryId)
+        return m
+      })
+      setActive(newPrimaryId)
+    } else {
+      setPaneRoots(prev => new Map([...prev, [primaryId!, newRoot]]))
+      if ((focusedPanes.get(primaryId!) ?? primaryId) === paneId) {
+        setFocusedPanes(prev => new Map([...prev, [primaryId!, getLeafIds(newRoot)[0]]]))
+      }
+    }
+
+    window.electronAPI.killSession(paneId)
+    removeSession(paneId)
+  }
 
   const handleSplit = (id: string, dir: 'h' | 'v') => {
     const primaryId = activeId
@@ -217,7 +275,9 @@ export default function App() {
       : splitLeaf(currentRoot, focusedId, dir, id)
     setPaneRoots(prev => new Map([...prev, [primaryId, newRoot]]))
     setFocusedPanes(prev => new Map([...prev, [primaryId, id]]))
-    setActive(id)
+    // Stay on the primary tab — paneRoots is keyed by primaryId, so switching
+    // activeId to the secondary pane would leave the split unrendered.
+    setActive(primaryId)
   }
 
   const handleSplitWithNew = (newId: string) => {
@@ -231,7 +291,9 @@ export default function App() {
       : splitLeaf(currentRoot, focusedId, dir, newId)
     setPaneRoots(prev => new Map([...prev, [sourceId, newRoot]]))
     setFocusedPanes(prev => new Map([...prev, [sourceId, newId]]))
-    setActive(newId)
+    // Stay on the primary tab — the new session is a secondary pane, so
+    // activeId must remain the source to index into paneRoots correctly.
+    setActive(sourceId)
   }
 
   const handlePaneFocus = (id: string) => {
@@ -484,6 +546,7 @@ export default function App() {
                 key={session.id}
                 style={style}
                 onClick={splitRect ? () => handlePaneFocus(session.id) : undefined}
+                onContextMenu={(e) => handlePaneContextMenu(e, session.id)}
               >
                 <TerminalView
                   sessionId={session.id}
@@ -491,6 +554,15 @@ export default function App() {
                   isShell={session.type === 'shell'}
                   onCmdK={() => setShowSwitcher(true)}
                 />
+                {splitRect && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleClosePane(session.id) }}
+                    title="Close pane"
+                    className="absolute top-1 right-1 z-20 w-5 h-5 flex items-center justify-center text-sm leading-none rounded bg-black/40 text-[#aaa] hover:bg-black/70 hover:text-white"
+                  >
+                    ×
+                  </button>
+                )}
               </div>
             )
           })}

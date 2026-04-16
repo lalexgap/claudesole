@@ -45,7 +45,9 @@ export function TerminalView({ sessionId, isActive, isShell, onCmdK }: TerminalV
 
   const handleSearchChange = (q: string) => {
     setSearchQuery(q)
-    if (q) handleRef.current?.findNext(q)
+    // Incremental: expand the current selection instead of jumping to the next
+    // match on every keystroke, so typing "foo" stops at the first "foo" match.
+    if (q) handleRef.current?.findNext(q, { incremental: true })
   }
 
   const handleSearchKey = (e: React.KeyboardEvent) => {

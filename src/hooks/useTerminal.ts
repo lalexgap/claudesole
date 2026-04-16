@@ -7,8 +7,8 @@ import '@xterm/xterm/css/xterm.css'
 import { useSessionsStore } from '../store/sessions'
 
 export interface TerminalHandle {
-  findNext: (query: string) => void
-  findPrevious: (query: string) => void
+  findNext: (query: string, opts?: { incremental?: boolean }) => boolean
+  findPrevious: (query: string) => boolean
   scrollToBottom: () => void
 }
 
@@ -52,6 +52,9 @@ export function useTerminal(
     let hoveredUrl: string | null = null
 
     const term = new Terminal({
+      // Required for SearchAddon.findNext decorations (registerDecoration is
+      // still proposed API in xterm.js). Without this, find silently throws.
+      allowProposedApi: true,
       theme: {
         background: '#1a1a1a',
         foreground: '#e5e5e5',
@@ -92,7 +95,7 @@ export function useTerminal(
     fitAddon.fit()
 
     handleRef.current = {
-      findNext: (q) => searchAddon.findNext(q, { decorations: searchDecorations }),
+      findNext: (q, opts) => searchAddon.findNext(q, { decorations: searchDecorations, incremental: opts?.incremental }),
       findPrevious: (q) => searchAddon.findPrevious(q, { decorations: searchDecorations }),
       scrollToBottom: () => term.scrollToBottom(),
     }
@@ -215,11 +218,13 @@ export function useTerminal(
   }, [sessionId])
 }
 
+// Addon typings require 6-char hex (#RRGGBB) for background colors; earlier
+// 8-char values (#RRGGBBAA) were silently rejected and no highlight rendered.
 const searchDecorations = {
-  matchBackground: '#f6f6a060',
+  matchBackground: '#665800',
   matchBorder: '#f6f6a0',
   matchOverviewRuler: '#f6f6a0',
-  activeMatchBackground: '#ff800080',
+  activeMatchBackground: '#aa4800',
   activeMatchBorder: '#ff8000',
   activeMatchColorOverviewRuler: '#ff8000',
 }

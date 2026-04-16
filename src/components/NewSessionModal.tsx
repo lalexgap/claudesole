@@ -249,10 +249,17 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
   }
 
   return (
-    <div className="fixed inset-0 bg-app-750 flex z-[1000]">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 bg-black/65 flex items-start justify-center pt-16 z-[1000]"
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        className="flex h-[680px] w-[960px] max-h-[calc(100vh-8rem)] max-w-[calc(100vw-4rem)] bg-app-750 rounded-xl border border-app-450 shadow-[0_24px_64px_rgba(0,0,0,0.6)] overflow-hidden"
+      >
         {step === 'pick' ? (
           /* ── Step 1: Session / folder picker ── */
-          <div className="w-[360px] flex flex-col border-r border-app-550">
+          <div className="w-[420px] flex flex-col border-r border-app-550">
             <div className="shrink-0 border-b border-app-550">
               <div className="px-3.5 pt-3 pb-2.5">
                 <input
@@ -438,7 +445,7 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
           </div>
         ) : (
           /* ── Step 2: New session options ── */
-          <div className="w-[360px] flex flex-col border-r border-app-550">
+          <div className="w-[420px] flex flex-col border-r border-app-550">
             <div className="shrink-0 border-b border-app-550 px-3.5 py-3">
               <button
                 onClick={() => setStep('pick')}
@@ -528,7 +535,7 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
         )}
 
         {/* Right panel */}
-        <div className="flex-1 p-4 flex flex-col gap-3 overflow-y-auto max-w-2xl">
+        <div className="flex-1 p-5 flex flex-col gap-3 overflow-y-auto">
           {step === 'pick' ? (
             <>
               {!activeSession && (
@@ -592,6 +599,7 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
             </>
           )}
         </div>
+      </div>
     </div>
   )
 }
