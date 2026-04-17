@@ -112,4 +112,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   semanticSearch: (query: string, sessions: unknown[], topK?: number): Promise<Array<{ session: unknown; score: number }>> =>
     ipcRenderer.invoke('embeddings:search', { query, sessions, topK }),
 
+  listDirectory: (dirPath: string): Promise<Array<{ name: string; path: string; isDir: boolean; isHidden: boolean }>> =>
+    ipcRenderer.invoke('fs:listDir', dirPath),
+
+  walkDirectory: (rootPath: string, includeHidden?: boolean, maxEntries?: number): Promise<{ entries: Array<{ name: string; path: string; relPath: string }>; truncated: boolean; cap: number }> =>
+    ipcRenderer.invoke('fs:walkDir', { rootPath, includeHidden, maxEntries }),
+
 })

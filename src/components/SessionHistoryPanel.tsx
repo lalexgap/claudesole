@@ -1,17 +1,21 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import clsx from 'clsx'
-import { ClaudeSession } from '../types/ipc'
+import { ClaudeSession, CodexSession } from '../types/ipc'
 import { ContextBar } from './ContextBar'
 
+type HistorySession =
+  | (ClaudeSession & { source: 'claude' })
+  | (CodexSession & { source: 'codex' })
+
 interface Props {
-  onResume: (session: ClaudeSession, skipPermissions: boolean) => void
-  onFork: (session: ClaudeSession, skipPermissions: boolean) => void
+  onResume: (session: HistorySession, skipPermissions: boolean) => void
+  onFork: (session: HistorySession, skipPermissions: boolean) => void
   onClose: () => void
 }
 
 interface Group {
   label: string
-  sessions: ClaudeSession[]
+  sessions: HistorySession[]
 }
 
 function relativeTime(ms: number): string {
@@ -26,7 +30,7 @@ function relativeTime(ms: number): string {
   return new Date(ms).toLocaleDateString()
 }
 
-function groupSessions(sessions: ClaudeSession[]): Group[] {
+function groupSessions(sessions: HistorySession[]): Group[] {
   const now = Date.now()
   const day = 86_400_000
   const buckets: { label: string; min: number }[] = [
@@ -59,17 +63,17 @@ function loadFavorites(): Set<string> {
 }
 
 export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
-  const [sessions, setSessions] = useState<ClaudeSession[]>([])
+  const [sessions, setSessions] = useState<HistorySession[]>([])
   const [query, setQuery] = useState('')
-  const [selected, setSelected] = useState<ClaudeSession | null>(null)
+  const [selected, setSelected] = useState<HistorySession | null>(null)
   const [skipPermissions, setSkipPermissions] = useState(true)
   const [favorites, setFavorites] = useState<Set<string>>(loadFavorites)
   const [hoveredRow, setHoveredRow] = useState<string | null>(null)
   const [gitInfo, setGitInfo] = useState<{ branch: string | null; isWorktree: boolean } | null>(null)
   const [summary, setSummary] = useState<string | null>(null)
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; session: ClaudeSession } | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; session: HistorySession } | null>(null)
   const [searchMode, setSearchMode] = useState<'text' | 'semantic'>('text')
-  const [semanticResults, setSemanticResults] = useState<Array<{ session: ClaudeSession; score: number }> | null>(null)
+  const [semanticResults, setSemanticResults] = useState<Array<{ session: HistorySession; score: number }> | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const [semanticAvailable, setSemanticAvailable] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -78,8 +82,15 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
   useEffect(() => {
     searchRef.current?.focus()
     let cancelled = false
-    window.electronAPI.listSessions().then(all => {
+    Promise.all([
+      window.electronAPI.listSessions().catch(() => [] as ClaudeSession[]),
+      window.electronAPI.listCodexSessions().catch(() => [] as CodexSession[]),
+    ]).then(([claudeSessions, codexSessions]) => {
       if (cancelled) return
+      const all = [
+        ...claudeSessions.map(s => ({ ...s, source: 'claude' as const })),
+        ...codexSessions.map(s => ({ ...s, source: 'codex' as const })),
+      ].sort((a, b) => b.lastActivity - a.lastActivity)
       setSessions(all)
       // Generate titles for every uncached session, with bounded concurrency so
       // we don't fire hundreds of simultaneous AI calls.
@@ -103,7 +114,7 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
         .then(available => {
           if (available) {
             setSemanticAvailable(true)
-            window.electronAPI.ensureEmbeddings(all).catch(() => {})
+            window.electronAPI.ensureEmbeddings(claudeSessions).catch(() => {})
           }
         })
         .catch(() => {})
@@ -151,8 +162,9 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
     searchDebounceRef.current = setTimeout(async () => {
       setIsSearching(true)
       try {
-        const results = await window.electronAPI.semanticSearch(query, sessions)
-        setSemanticResults(results)
+        const claudeSessions = sessions.filter((session): session is ClaudeSession & { source: 'claude' } => session.source === 'claude')
+        const results = await window.electronAPI.semanticSearch(query, claudeSessions)
+        setSemanticResults(results.map(result => ({ session: { ...result.session, source: 'claude' as const }, score: result.score })))
       } catch {
         setSemanticResults(null)
       } finally {
@@ -162,13 +174,13 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
     return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
   }, [query, searchMode, sessions])
 
-  const handleRegenerateTitle = async (session: ClaudeSession) => {
+  const handleRegenerateTitle = async (session: HistorySession) => {
     await window.electronAPI.clearTitleCache(session.sessionId)
     const title = await window.electronAPI.generateSessionTitle(session.sessionId, session.firstPrompt, session.latestPrompt || undefined)
     if (title) setSessions(prev => prev.map(s => s.sessionId === session.sessionId ? { ...s, title } : s))
   }
 
-  const handleRegenerateSummary = async (session: ClaudeSession) => {
+  const handleRegenerateSummary = async (session: HistorySession) => {
     await window.electronAPI.clearTitleCache(session.sessionId)
     if (selected?.sessionId === session.sessionId) setSummary(null)
     const s = await window.electronAPI.generateSessionSummary(session.sessionId, session.firstPrompt, session.latestPrompt || undefined)
@@ -297,6 +309,12 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-1.5">
                         <span className={clsx(
+                          'text-[10px] font-mono shrink-0',
+                          session.source === 'codex' ? 'text-purple-400' : 'text-green-400'
+                        )}>
+                          {session.source === 'codex' ? '[cx]' : '[cl]'}
+                        </span>
+                        <span className={clsx(
                           'text-[13px] font-medium overflow-hidden text-ellipsis whitespace-nowrap flex-1',
                           isSelected ? 'text-neutral-200' : 'text-[#bbb]'
                         )}>
@@ -345,7 +363,23 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
                   {selected.title || selected.slug || selected.projectName}
                 </div>
                 {selected.slug && (
-                  <div className="text-[#666] text-[13px]">{selected.projectName}</div>
+                  <div className="text-[#666] text-[13px] flex items-center gap-2">
+                    <span>{selected.projectName}</span>
+                    <span className={clsx(
+                      'text-[10px] font-mono',
+                      selected.source === 'codex' ? 'text-purple-400' : 'text-green-400'
+                    )}>
+                      {selected.source === 'codex' ? '[cx]' : '[cl]'}
+                    </span>
+                  </div>
+                )}
+                {!selected.slug && (
+                  <div className={clsx(
+                    'text-[10px] font-mono',
+                    selected.source === 'codex' ? 'text-purple-400' : 'text-green-400'
+                  )}>
+                    {selected.source === 'codex' ? '[cx]' : '[cl]'}
+                  </div>
                 )}
               </div>
               <span
@@ -393,7 +427,7 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
               <div className="text-[#888] text-xs">{relativeTime(selected.lastActivity)}</div>
             </div>
 
-            {selected.tokensUsed !== undefined && (
+            {selected.source === 'claude' && selected.tokensUsed !== undefined && (
               <ContextBar tokensUsed={selected.tokensUsed} />
             )}
 
@@ -465,6 +499,8 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
     </div>
   )
 }
+
+export type { HistorySession }
 
 function HistCtxItem({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
   const [hov, setHov] = useState(false)

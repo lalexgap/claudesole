@@ -4,12 +4,14 @@ import { TabBar } from './components/TabBar'
 import { TerminalView } from './components/TerminalView'
 import { NewSessionModal, SessionOpts } from './components/NewSessionModal'
 import { SessionSidebar } from './components/SessionSidebar'
+import { FileBrowserPanel } from './components/FileBrowserPanel'
 import { SessionHistoryPanel } from './components/SessionHistoryPanel'
 import { PaneNode, splitLeaf, removeFromTree, getLeafIds, computeLayout, updateRatioAtPath, SplitDividers } from './components/SplitView'
 import { QuickSwitcher } from './components/QuickSwitcher'
 import { WorktreePanel } from './components/WorktreePanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ClaudeSession, CodexSession } from './types/ipc'
+import type { HistorySession } from './components/SessionHistoryPanel'
 
 export default function App() {
   const { sessions, activeId, addSession, removeSession, setActive, renameSession, togglePin, setAiTitle, clearAiTitle } = useSessionsStore()
@@ -19,6 +21,7 @@ export default function App() {
   const [showSwitcher, setShowSwitcher] = useState(false)
   const [showWorktrees, setShowWorktrees] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showFiles, setShowFiles] = useState(false)
 
   // Map from primary session ID → pane tree for that tab's split layout
   const [paneRoots, setPaneRoots] = useState<Map<string, PaneNode>>(new Map())
@@ -66,6 +69,7 @@ export default function App() {
   const toggleHistory = () => setShowHistory(v => !v)
   const toggleWorktrees = () => setShowWorktrees(v => !v)
   const toggleSettings = () => setShowSettings(v => !v)
+  const toggleFiles = () => setShowFiles(v => !v)
 
   // Auto-open modal on launch
   useEffect(() => {
@@ -344,13 +348,27 @@ export default function App() {
     window.electronAPI.createSession(newId, session.cwd, claudeId, true, false, true)
   }
 
-  const handleHistoryResume = (session: ClaudeSession, skipPermissions: boolean) => {
+  const handleHistoryResume = (session: HistorySession, skipPermissions: boolean) => {
+    if (session.source === 'codex') {
+      const sessionId = addSession(session.cwd, session.firstPrompt, undefined, undefined, 'codex', false, session.sessionId)
+      window.electronAPI.createCodexSession(sessionId, session.cwd, session.sessionId, skipPermissions, false)
+      setShowHistory(false)
+      return
+    }
+
     const sessionId = addSession(session.cwd, session.firstPrompt, undefined, session.sessionId)
     window.electronAPI.createSession(sessionId, session.cwd, session.sessionId, skipPermissions, false)
     setShowHistory(false)
   }
 
-  const handleHistoryFork = (session: ClaudeSession, skipPermissions: boolean) => {
+  const handleHistoryFork = (session: HistorySession, skipPermissions: boolean) => {
+    if (session.source === 'codex') {
+      const newId = addSession(session.cwd, session.firstPrompt, undefined, undefined, 'codex', false, session.sessionId)
+      window.electronAPI.createCodexSession(newId, session.cwd, session.sessionId, skipPermissions, true)
+      setShowHistory(false)
+      return
+    }
+
     const newId = addSession(session.cwd, session.firstPrompt, undefined, session.sessionId)
     window.electronAPI.createSession(newId, session.cwd, session.sessionId, skipPermissions, false, true)
     setShowHistory(false)
@@ -378,6 +396,7 @@ export default function App() {
       if (e.key === 'k') { e.preventDefault(); setShowSwitcher(v => !v); return }
       if (e.key === 'G' && e.shiftKey) { e.preventDefault(); toggleWorktrees(); return }
       if (e.key === ',') { e.preventDefault(); toggleSettings(); return }
+      if (e.key === 'e') { e.preventDefault(); toggleFiles(); return }
 
       if (e.key === 'Escape' && showSwitcher) { e.preventDefault(); setShowSwitcher(false); return }
 
@@ -488,6 +507,8 @@ export default function App() {
         onToggleWorktrees={toggleWorktrees}
         settingsOpen={showSettings}
         onToggleSettings={toggleSettings}
+        filesOpen={showFiles}
+        onToggleFiles={toggleFiles}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -500,6 +521,16 @@ export default function App() {
             onFork={handleForkTab}
             onRegenerateTitle={handleRegenerateTitle}
             onNewSession={openModal}
+          />
+        )}
+
+        {showFiles && (
+          <FileBrowserPanel
+            rootPath={(() => {
+              const id = activeFocusedId ?? activeId
+              return sessions.find(s => s.id === id)?.cwd ?? null
+            })()}
+            onClose={() => setShowFiles(false)}
           />
         )}
 

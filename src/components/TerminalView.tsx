@@ -59,9 +59,36 @@ export function TerminalView({ sessionId, isActive, isShell, onCmdK }: TerminalV
     if (e.key === 'Escape') closeSearch()
   }
 
+  const [dropHover, setDropHover] = useState(false)
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('text/plain')) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    if (!dropHover) setDropHover(true)
+  }
+
+  const handleDragLeave = () => setDropHover(false)
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDropHover(false)
+    const text = e.dataTransfer.getData('text/plain')
+    if (!text) return
+    window.electronAPI.writeSession(sessionId, text)
+  }
+
   return (
-    <div className="relative w-full h-full p-2 box-border">
+    <div
+      className="relative w-full h-full p-2 box-border"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div ref={containerRef} className="w-full h-full" />
+      {dropHover && (
+        <div className="absolute inset-2 pointer-events-none border-2 border-dashed border-green-400/60 rounded bg-green-400/[0.04] z-20" />
+      )}
 
       {showSearch && (
         <div className="absolute top-4 right-6 bg-app-750 border border-app-350 rounded-md flex items-center gap-1 px-2 py-1 shadow-[0_4px_16px_rgba(0,0,0,0.5)] z-10">

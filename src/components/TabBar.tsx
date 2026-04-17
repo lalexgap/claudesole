@@ -27,6 +27,8 @@ interface TabBarProps {
   onToggleWorktrees: () => void
   settingsOpen: boolean
   onToggleSettings: () => void
+  filesOpen: boolean
+  onToggleFiles: () => void
 }
 
 export function TabBar({
@@ -34,6 +36,7 @@ export function TabBar({
   onRenameTab, onPinTab, onForkTab, onSplitHTab, onSplitVTab, onRegenerateTitle,
   historyOpen, onToggleHistory, sidebarOpen, onToggleSidebar,
   worktreesOpen, onToggleWorktrees, settingsOpen, onToggleSettings,
+  filesOpen, onToggleFiles,
 }: TabBarProps) {
   const getSplitLabel = (session: Session): string | undefined => {
     const root = paneRoots.get(session.id)
@@ -153,6 +156,17 @@ export function TabBar({
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         ⎇
+      </button>
+
+      <button
+        onClick={onToggleFiles}
+        title="Toggle file browser (⌘E)"
+        className={toolbarBtnCls(filesOpen)}
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" className="inline-block align-middle">
+          <path d="M2 4a1 1 0 0 1 1-1h3.5l1.5 1.75H13a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4z" />
+        </svg>
       </button>
 
       <button

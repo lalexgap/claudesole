@@ -84,6 +84,11 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
     (s.title || '').toLowerCase().includes(q)
   ), [codexSessions, q])
 
+  const filteredRecentSessions = useMemo(() => [
+    ...filteredSessions.map(session => ({ type: 'session' as const, session })),
+    ...filteredCodexSessions.map(session => ({ type: 'codexSession' as const, session })),
+  ].sort((a, b) => b.session.lastActivity - a.session.lastActivity), [filteredSessions, filteredCodexSessions])
+
   const recentFolders = useMemo(() => [...new Set(sessions.map(s => s.cwd))]
     .filter(cwd => !q || cwd.toLowerCase().includes(q))
     .slice(0, 3), [sessions, q])
@@ -93,15 +98,14 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
     .slice(0, 3), [codexSessions, q])
 
   const items: Item[] = useMemo(() => [
-    ...filteredSessions.map(s => ({ type: 'session' as const, session: s })),
-    ...filteredCodexSessions.map(s => ({ type: 'codexSession' as const, session: s })),
+    ...filteredRecentSessions,
     ...recentFolders.map(cwd => ({ type: 'folder' as const, cwd })),
     { type: 'browse' },
     ...recentCodexFolders.map(cwd => ({ type: 'codexFolder' as const, cwd })),
     { type: 'codexBrowse' },
     ...recentFolders.map(cwd => ({ type: 'shellFolder' as const, cwd })),
     { type: 'shellBrowse' },
-  ], [filteredSessions, filteredCodexSessions, recentFolders, recentCodexFolders])
+  ], [filteredRecentSessions, recentFolders, recentCodexFolders])
 
   useEffect(() => { setSelected(0) }, [query])
 
@@ -111,11 +115,7 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
 
   const activeSession: ClaudeSession | CodexSession | null =
     hoveredSession ??
-    (selected < filteredSessions.length
-      ? filteredSessions[selected]
-      : selected < filteredSessions.length + filteredCodexSessions.length
-        ? filteredCodexSessions[selected - filteredSessions.length]
-        : null)
+    (selected < filteredRecentSessions.length ? filteredRecentSessions[selected].session : null)
 
   useEffect(() => {
     if (!activeSession || !activeSession.firstPrompt) return
@@ -163,6 +163,14 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
     setStep('options')
   }
 
+  const sessionOffset = 0
+  const folderOffset = sessionOffset + filteredRecentSessions.length
+  const browseOffset = folderOffset + recentFolders.length
+  const codexFolderOffset = browseOffset + 1
+  const codexBrowseOffset = codexFolderOffset + recentCodexFolders.length
+  const shellFolderOffset = codexBrowseOffset + 1
+  const shellBrowseOffset = shellFolderOffset + recentFolders.length
+
   const handleStart = useCallback(() => {
     if (!pendingCwd) return
     const opts = { skipPermissions, worktree, branch: worktree && branch ? branch : undefined }
@@ -171,12 +179,11 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
   }, [pendingCwd, pendingType, skipPermissions, worktree, branch, onNewInFolder, onNewCodexInFolder])
 
   const cycleSection = useCallback((reverse: boolean) => {
-    const fOffset = filteredSessions.length
-    const sfOffset = fOffset + recentFolders.length + 1
     const sections = [
-      ...(filteredSessions.length > 0 ? [0] : []),
-      fOffset,
-      sfOffset,
+      ...(filteredRecentSessions.length > 0 ? [sessionOffset] : []),
+      folderOffset,
+      codexFolderOffset,
+      shellFolderOffset,
     ]
     setSelected(cur => {
       const currentIdx = sections.reduce((acc, start, i) => cur >= start ? i : acc, 0)
@@ -185,7 +192,7 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
         : (currentIdx + 1) % sections.length
       return sections[nextIdx]
     })
-  }, [filteredSessions.length, recentFolders.length])
+  }, [filteredRecentSessions.length, sessionOffset, folderOffset, codexFolderOffset, shellFolderOffset])
 
   const activate = useCallback((item: Item) => {
     if (item.type === 'session') onResume(item.session, { skipPermissions, worktree: false })
@@ -226,15 +233,6 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [step, branchOpen, branchIdx, filteredBranches, handleStart])
-
-  const sessionOffset = 0
-  const codexSessionOffset = filteredSessions.length
-  const folderOffset = codexSessionOffset + filteredCodexSessions.length
-  const browseOffset = folderOffset + recentFolders.length
-  const codexFolderOffset = browseOffset + 1
-  const codexBrowseOffset = codexFolderOffset + recentCodexFolders.length
-  const shellFolderOffset = codexBrowseOffset + 1
-  const shellBrowseOffset = shellFolderOffset + recentFolders.length
 
   const rowCls = (idx: number) => clsx(
     'px-3 py-2 cursor-pointer rounded-md mx-1 my-px',
@@ -285,19 +283,28 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
             </div>
 
             <div className="overflow-y-auto flex-1">
-              {filteredSessions.length > 0 && (
+              {filteredRecentSessions.length > 0 && (
                 <>
                   <SectionLabel>Resume session</SectionLabel>
-                  {filteredSessions.map((session, i) => (
+                  {filteredRecentSessions.map(({ type, session }, i) => (
                     <div
                       key={session.sessionId}
                       ref={el => { if (el) itemRefs.current.set(sessionOffset + i, el); else itemRefs.current.delete(sessionOffset + i) }}
                       className={rowCls(sessionOffset + i)}
-                      onClick={() => onResume(session, { skipPermissions, worktree: false })}
+                      onClick={() => {
+                        if (type === 'codexSession') onResumeCodex(session, { skipPermissions, worktree: false })
+                        else onResume(session, { skipPermissions, worktree: false })
+                      }}
                       onMouseEnter={() => { setSelected(sessionOffset + i); setHoveredSession(session) }}
                       onMouseLeave={() => setHoveredSession(null)}
                     >
                       <div className="flex items-baseline gap-1.5">
+                        <span className={clsx(
+                          'text-[10px] font-mono shrink-0',
+                          type === 'codexSession' ? 'text-purple-400' : 'text-green-400'
+                        )}>
+                          {type === 'codexSession' ? '[cx]' : '[cl]'}
+                        </span>
                         <span className="text-neutral-300 font-medium text-[13px] overflow-hidden text-ellipsis whitespace-nowrap">
                           {session.title || session.slug || session.projectName}
                         </span>
@@ -317,40 +324,7 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
                   ))}
                 </>
               )}
-              {filteredCodexSessions.length > 0 && (
-                <>
-                  <SectionLabel>Resume Codex session</SectionLabel>
-                  {filteredCodexSessions.map((session, i) => (
-                    <div
-                      key={session.sessionId}
-                      ref={el => { if (el) itemRefs.current.set(codexSessionOffset + i, el); else itemRefs.current.delete(codexSessionOffset + i) }}
-                      className={rowCls(codexSessionOffset + i)}
-                      onClick={() => onResumeCodex(session, { skipPermissions, worktree: false })}
-                      onMouseEnter={() => { setSelected(codexSessionOffset + i); setHoveredSession(session) }}
-                      onMouseLeave={() => setHoveredSession(null)}
-                    >
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-purple-400 text-[10px] font-mono shrink-0">[cx]</span>
-                        <span className="text-neutral-300 font-medium text-[13px] overflow-hidden text-ellipsis whitespace-nowrap">
-                          {session.title || session.slug || session.projectName}
-                        </span>
-                        <span className="text-[#666] text-[11px] ml-auto shrink-0">
-                          {relativeTime(session.lastActivity)}
-                        </span>
-                      </div>
-                      <div className="text-[#777] text-[11px] mt-px overflow-hidden text-ellipsis whitespace-nowrap">
-                        {session.projectName}{session.slug ? ` · ${session.cwd}` : ''}
-                      </div>
-                      {(session.latestPrompt || session.firstPrompt) && (
-                        <div className="text-[#888] text-[11px] leading-[1.5] mt-[3px] line-clamp-2">
-                          {session.latestPrompt || session.firstPrompt}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </>
-              )}
-              {filteredSessions.length === 0 && filteredCodexSessions.length === 0 && (
+              {filteredRecentSessions.length === 0 && (
                 <div className="p-4 text-[#555] text-xs">
                   {query ? 'No matching sessions' : 'No recent sessions found'}
                 </div>

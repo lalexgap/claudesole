@@ -217,6 +217,52 @@ function setupIpcHandlers() {
   ipcMain.handle('settings:get', () => getSettings())
 
   ipcMain.handle('settings:save', (_e, s) => { saveSettings(s); return true })
+
+  ipcMain.handle('fs:walkDir', (_event, { rootPath, includeHidden, maxEntries }: { rootPath: string; includeHidden?: boolean; maxEntries?: number }) => {
+    const resolved = validateDir(rootPath)
+    const cap = Math.max(100, Math.min(50000, maxEntries ?? 15000))
+    const skipDirs = new Set(['node_modules', '.git', '.next', 'dist', 'build', 'out', 'target', '.venv', 'venv', '__pycache__', '.turbo', '.cache', 'coverage', '.parcel-cache', '.pnpm-store'])
+    const out: Array<{ name: string; path: string; relPath: string }> = []
+    let truncated = false
+
+    const walk = (dir: string, rel: string) => {
+      if (out.length >= cap) { truncated = true; return }
+      let entries: fs.Dirent[]
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true })
+      } catch { return }
+      for (const e of entries) {
+        if (out.length >= cap) { truncated = true; return }
+        const isHidden = e.name.startsWith('.')
+        if (!includeHidden && isHidden) continue
+        if (e.isDirectory()) {
+          if (skipDirs.has(e.name)) continue
+          walk(path.join(dir, e.name), rel ? path.join(rel, e.name) : e.name)
+        } else if (e.isFile()) {
+          const relPath = rel ? path.join(rel, e.name) : e.name
+          out.push({ name: e.name, path: path.join(dir, e.name), relPath })
+        }
+      }
+    }
+    walk(resolved, '')
+    return { entries: out, truncated, cap }
+  })
+
+  ipcMain.handle('fs:listDir', (_event, dirPath: string) => {
+    const resolved = validateDir(dirPath)
+    const entries = fs.readdirSync(resolved, { withFileTypes: true })
+    return entries
+      .map(e => ({
+        name: e.name,
+        path: path.join(resolved, e.name),
+        isDir: e.isDirectory(),
+        isHidden: e.name.startsWith('.'),
+      }))
+      .sort((a, b) => {
+        if (a.isDir !== b.isDir) return a.isDir ? -1 : 1
+        return a.name.localeCompare(b.name)
+      })
+  })
 }
 
 function createWindow() {

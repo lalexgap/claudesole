@@ -22,6 +22,7 @@ export interface CodexSession {
   latestPrompt: string
   model?: string
   title?: string
+  summary?: string
 }
 
 export interface ClaudeSession {
@@ -73,6 +74,8 @@ export interface ElectronAPI {
   embeddingsAvailable: () => Promise<boolean>
   ensureEmbeddings: (sessions: ClaudeSession[]) => Promise<{ total: number; indexed: number }>
   semanticSearch: (query: string, sessions: ClaudeSession[], topK?: number) => Promise<Array<{ session: ClaudeSession; score: number }>>
+  listDirectory: (dirPath: string) => Promise<Array<{ name: string; path: string; isDir: boolean; isHidden: boolean }>>
+  walkDirectory: (rootPath: string, includeHidden?: boolean, maxEntries?: number) => Promise<{ entries: Array<{ name: string; path: string; relPath: string }>; truncated: boolean; cap: number }>
 }
 
 declare global {
