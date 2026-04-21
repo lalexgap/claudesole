@@ -30,7 +30,7 @@ function extractText(content: unknown): string {
   return ''
 }
 
-function parseFile(filePath: string, fileSize: number): { cwd?: string; slug?: string; firstPrompt?: string; latestPrompt?: string; tokensUsed?: number; model?: string } {
+export function parseFile(filePath: string, fileSize: number): { cwd?: string; slug?: string; firstPrompt?: string; latestPrompt?: string; tokensUsed?: number; model?: string } {
   try {
     const HEAD = 16384
     let headBuf: Buffer
@@ -77,7 +77,7 @@ interface TailData {
   model?: string
 }
 
-function findTailData(filePath: string, fileSize: number): TailData {
+export function findTailData(filePath: string, fileSize: number): TailData {
   const CHUNK = 32768
   let pos = fileSize
   let carry = ''

@@ -6,6 +6,7 @@ import { listClaudeSessions, listCodexSessions, latestSessionIdForCwd, latestSes
 import { getGitInfo, listWorktrees, removeWorktree, listBranches, createWorktree, resolveWorktreeCwd } from './gitInfo'
 import { generateTitle, generateSummary, clearTitleCache, clearAllTitleCache } from './titleManager'
 import { ensureEmbeddings, semanticSearch, getIndexedCount, isEmbeddingAvailable } from './embeddingManager'
+import { fullTextSearchSessions } from './searchManager'
 import { getSettings, saveSettings } from './settingsManager'
 
 // ── Log capture ──────────────────────────────────────────────────────────────
@@ -24,9 +25,19 @@ function pushLog(level: LogEntry['level'], ...args: unknown[]) {
 const _log = console.log.bind(console)
 const _warn = console.warn.bind(console)
 const _error = console.error.bind(console)
-console.log = (...a) => { _log(...a); pushLog('log', ...a) }
-console.warn = (...a) => { _warn(...a); pushLog('warn', ...a) }
-console.error = (...a) => { _error(...a); pushLog('error', ...a) }
+// Swallow EIO / EPIPE from the underlying stream (e.g. stdout closed when
+// launched without a TTY) — otherwise a single stray log crashes the app.
+const safeWrite = (fn: (...a: unknown[]) => void, args: unknown[]) => {
+  try { fn(...args) } catch {}
+}
+console.log = (...a) => { safeWrite(_log, a); pushLog('log', ...a) }
+console.warn = (...a) => { safeWrite(_warn, a); pushLog('warn', ...a) }
+console.error = (...a) => { safeWrite(_error, a); pushLog('error', ...a) }
+
+process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
+  if (err?.code === 'EIO' || err?.code === 'EPIPE') return
+  _error('[uncaughtException]', err)
+})
 
 function validateDir(p: unknown): string {
   if (typeof p !== 'string' || !path.isAbsolute(p)) throw new Error('Invalid path')
@@ -81,9 +92,9 @@ function setupIpcHandlers() {
     try { return listBranches(validateDir(cwd)) } catch { return [] }
   })
 
-  ipcMain.handle('git:createWorktree', (_event, { repoPath, branch }: { repoPath: string; branch: string }) => {
+  ipcMain.handle('git:createWorktree', (_event, { repoPath, branch, baseBranch }: { repoPath: string; branch: string; baseBranch?: string }) => {
     try {
-      return createWorktree(validateDir(repoPath), branch)
+      return createWorktree(validateDir(repoPath), branch, baseBranch)
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to create worktree')
     }
@@ -210,6 +221,10 @@ function setupIpcHandlers() {
 
   ipcMain.handle('embeddings:search', (_e, { query, sessions, topK }) =>
     semanticSearch(query, sessions, topK ?? 20)
+  )
+
+  ipcMain.handle('search:fullText', (_e, { query, limit }) =>
+    fullTextSearchSessions(query, limit ?? 100)
   )
 
   ipcMain.handle('logs:get', () => [...logBuffer])

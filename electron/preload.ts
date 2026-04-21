@@ -66,8 +66,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listBranches: (cwd: string): Promise<string[]> =>
     ipcRenderer.invoke('git:listBranches', cwd),
 
-  createWorktree: (repoPath: string, branch: string): Promise<string> =>
-    ipcRenderer.invoke('git:createWorktree', { repoPath, branch }),
+  createWorktree: (repoPath: string, branch: string, baseBranch?: string): Promise<string> =>
+    ipcRenderer.invoke('git:createWorktree', { repoPath, branch, baseBranch }),
 
   openExternal: (url: string) =>
     ipcRenderer.send('shell:openExternal', url),
@@ -111,6 +111,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   semanticSearch: (query: string, sessions: unknown[], topK?: number): Promise<Array<{ session: unknown; score: number }>> =>
     ipcRenderer.invoke('embeddings:search', { query, sessions, topK }),
+
+  fullTextSearchSessions: (query: string, limit?: number): Promise<Array<{ source: 'claude' | 'codex'; sessionId: string; snippet: string }>> =>
+    ipcRenderer.invoke('search:fullText', { query, limit }),
 
   listDirectory: (dirPath: string): Promise<Array<{ name: string; path: string; isDir: boolean; isHidden: boolean }>> =>
     ipcRenderer.invoke('fs:listDir', dirPath),

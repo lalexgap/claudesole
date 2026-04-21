@@ -39,6 +39,12 @@ export interface ClaudeSession {
   summary?: string
 }
 
+export interface SessionSearchHit {
+  source: 'claude' | 'codex'
+  sessionId: string
+  snippet: string
+}
+
 export interface ElectronAPI {
   createSession: (sessionId: string, cwd: string, resumeSessionId?: string, skipPermissions?: boolean, worktree?: boolean | string, forkSession?: boolean) => void
   createCodexSession: (sessionId: string, cwd: string, resumeSessionId?: string, skipPermissions?: boolean, forkSession?: boolean) => void
@@ -59,7 +65,7 @@ export interface ElectronAPI {
   listWorktrees: (cwd: string) => Promise<Worktree[]>
   removeWorktree: (repoPath: string, worktreePath: string, force: boolean) => Promise<void>
   listBranches: (cwd: string) => Promise<string[]>
-  createWorktree: (repoPath: string, branch: string) => Promise<string>
+  createWorktree: (repoPath: string, branch: string, baseBranch?: string) => Promise<string>
   openExternal: (url: string) => void
   getLatestSession: (cwd: string) => Promise<ClaudeSession | null>
   getSessionById: (sessionId: string) => Promise<ClaudeSession | null>
@@ -74,6 +80,7 @@ export interface ElectronAPI {
   embeddingsAvailable: () => Promise<boolean>
   ensureEmbeddings: (sessions: ClaudeSession[]) => Promise<{ total: number; indexed: number }>
   semanticSearch: (query: string, sessions: ClaudeSession[], topK?: number) => Promise<Array<{ session: ClaudeSession; score: number }>>
+  fullTextSearchSessions: (query: string, limit?: number) => Promise<SessionSearchHit[]>
   listDirectory: (dirPath: string) => Promise<Array<{ name: string; path: string; isDir: boolean; isHidden: boolean }>>
   walkDirectory: (rootPath: string, includeHidden?: boolean, maxEntries?: number) => Promise<{ entries: Array<{ name: string; path: string; relPath: string }>; truncated: boolean; cap: number }>
 }

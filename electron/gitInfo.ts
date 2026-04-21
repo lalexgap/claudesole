@@ -75,10 +75,28 @@ export function removeWorktree(repoPath: string, worktreePath: string, force: bo
   })
 }
 
-export function createWorktree(repoPath: string, branch: string): string {
+export function buildCreateWorktreeArgs(
+  repoPath: string,
+  branch: string,
+  baseBranch?: string,
+): { args: string[]; worktreePath: string } {
   const dirName = branch.replace(/\//g, '-')
   const worktreePath = path.join(repoPath, '.claude', 'worktrees', dirName)
-  execFileSync('git', ['-C', repoPath, 'worktree', 'add', worktreePath, branch], {
+  const args = ['-C', repoPath, 'worktree', 'add']
+  if (baseBranch) {
+    args.push('-b', branch, worktreePath, baseBranch)
+  } else {
+    args.push(worktreePath, branch)
+  }
+  return { args, worktreePath }
+}
+
+// Create a worktree. When `baseBranch` is supplied, a new branch is created
+// off of it (`git worktree add -b <branch> <path> <base>`); otherwise the
+// existing branch is checked out in the worktree.
+export function createWorktree(repoPath: string, branch: string, baseBranch?: string): string {
+  const { args, worktreePath } = buildCreateWorktreeArgs(repoPath, branch, baseBranch)
+  execFileSync('git', args, {
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'pipe'],
   })
@@ -138,7 +156,7 @@ export function listBranches(cwd: string): string[] {
 // 4. Falls back to the repo root if the worktree was properly removed (no git record).
 // Returns null if no git repo is found anywhere in the ancestor chain.
 export function resolveWorktreeCwd(missingPath: string): string | null {
-  // Find nearest ancestor that exists and belongs to a git repo
+  if (fs.existsSync(missingPath)) return missingPath
   let repoRoot: string | null = null
   let dir = path.dirname(missingPath)
   const fsRoot = path.parse(dir).root

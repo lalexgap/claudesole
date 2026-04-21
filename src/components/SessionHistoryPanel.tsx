@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import clsx from 'clsx'
-import { ClaudeSession, CodexSession } from '../types/ipc'
+import { ClaudeSession, CodexSession, SessionSearchHit } from '../types/ipc'
 import { ContextBar } from './ContextBar'
 
 type HistorySession =
-  | (ClaudeSession & { source: 'claude' })
-  | (CodexSession & { source: 'codex' })
+  | (ClaudeSession & { source: 'claude'; searchSnippet?: string })
+  | (CodexSession & { source: 'codex'; searchSnippet?: string })
 
 interface Props {
   onResume: (session: HistorySession, skipPermissions: boolean) => void
@@ -74,10 +74,13 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; session: HistorySession } | null>(null)
   const [searchMode, setSearchMode] = useState<'text' | 'semantic'>('text')
   const [semanticResults, setSemanticResults] = useState<Array<{ session: HistorySession; score: number }> | null>(null)
-  const [isSearching, setIsSearching] = useState(false)
+  const [textResults, setTextResults] = useState<SessionSearchHit[] | null>(null)
+  const [isSemanticSearching, setIsSemanticSearching] = useState(false)
+  const [isTextSearching, setIsTextSearching] = useState(false)
   const [semanticAvailable, setSemanticAvailable] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const semanticSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const textSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     searchRef.current?.focus()
@@ -154,13 +157,32 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
   }, [ctxMenu])
 
   useEffect(() => {
+    if (searchMode !== 'text' || !query.trim()) {
+      setTextResults(null)
+      return
+    }
+    if (textSearchDebounceRef.current) clearTimeout(textSearchDebounceRef.current)
+    textSearchDebounceRef.current = setTimeout(async () => {
+      setIsTextSearching(true)
+      try {
+        setTextResults(await window.electronAPI.fullTextSearchSessions(query))
+      } catch {
+        setTextResults(null)
+      } finally {
+        setIsTextSearching(false)
+      }
+    }, 250)
+    return () => { if (textSearchDebounceRef.current) clearTimeout(textSearchDebounceRef.current) }
+  }, [query, searchMode])
+
+  useEffect(() => {
     if (searchMode !== 'semantic' || !query.trim()) {
       setSemanticResults(null)
       return
     }
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
-    searchDebounceRef.current = setTimeout(async () => {
-      setIsSearching(true)
+    if (semanticSearchDebounceRef.current) clearTimeout(semanticSearchDebounceRef.current)
+    semanticSearchDebounceRef.current = setTimeout(async () => {
+      setIsSemanticSearching(true)
       try {
         const claudeSessions = sessions.filter((session): session is ClaudeSession & { source: 'claude' } => session.source === 'claude')
         const results = await window.electronAPI.semanticSearch(query, claudeSessions)
@@ -168,10 +190,10 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
       } catch {
         setSemanticResults(null)
       } finally {
-        setIsSearching(false)
+        setIsSemanticSearching(false)
       }
     }, 400)
-    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
+    return () => { if (semanticSearchDebounceRef.current) clearTimeout(semanticSearchDebounceRef.current) }
   }, [query, searchMode, sessions])
 
   const handleRegenerateTitle = async (session: HistorySession) => {
@@ -206,15 +228,40 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
       return semanticResults.map(r => r.session)
     }
     const q = query.toLowerCase()
-    return sessions.filter(s =>
-      !q ||
+    if (!q) return sessions
+
+    const metadataMatches = sessions.filter(s =>
       s.projectName.toLowerCase().includes(q) ||
       s.slug.toLowerCase().includes(q) ||
       s.cwd.toLowerCase().includes(q) ||
       s.firstPrompt.toLowerCase().includes(q) ||
+      s.latestPrompt.toLowerCase().includes(q) ||
       (s.title || '').toLowerCase().includes(q)
     )
-  }, [searchMode, semanticResults, query, sessions])
+
+    if (textResults === null) return metadataMatches
+
+    const sessionMap = new Map(sessions.map(session => [`${session.source}:${session.sessionId}`, session]))
+    const merged: HistorySession[] = []
+    const seen = new Set<string>()
+
+    for (const hit of textResults) {
+      const key = `${hit.source}:${hit.sessionId}`
+      const session = sessionMap.get(key)
+      if (!session || seen.has(key)) continue
+      merged.push({ ...session, searchSnippet: hit.snippet || undefined })
+      seen.add(key)
+    }
+
+    for (const session of metadataMatches) {
+      const key = `${session.source}:${session.sessionId}`
+      if (seen.has(key)) continue
+      merged.push(session)
+      seen.add(key)
+    }
+
+    return merged
+  }, [searchMode, semanticResults, query, sessions, textResults])
 
   const scoreMap = useMemo<Record<string, number>>(() => {
     if (!semanticResults) return {}
@@ -241,9 +288,12 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
           ref={searchRef}
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Search sessions…"
+          placeholder="Search conversations…"
           className="flex-1 bg-white/[0.05] border border-app-500 rounded-md px-2.5 py-[5px] text-neutral-200 text-[13px] outline-none"
         />
+        {searchMode === 'text' && query.trim() && isTextSearching && (
+          <span className="text-[#555] text-[11px] shrink-0">Indexing…</span>
+        )}
         {semanticAvailable && (
           <button
             onClick={() => { setSearchMode(m => m === 'text' ? 'semantic' : 'text'); setSemanticResults(null) }}
@@ -255,7 +305,7 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
                 : 'border-app-500 text-[#555] bg-white/[0.04]'
             )}
           >
-            {isSearching ? 'Searching…' : '~ Semantic'}
+            {isSemanticSearching ? 'Searching…' : '~ Semantic'}
           </button>
         )}
         <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
@@ -329,11 +379,11 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
                           </span>
                         )}
                       </div>
-                      {(session.latestPrompt || session.firstPrompt) && (
-                        <div className="text-[#666] text-[11px] mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap">
-                          {session.latestPrompt || session.firstPrompt}
-                        </div>
-                      )}
+                        {(session.searchSnippet || session.latestPrompt || session.firstPrompt) && (
+                          <div className="text-[#666] text-[11px] mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap">
+                          {session.searchSnippet || session.latestPrompt || session.firstPrompt}
+                          </div>
+                        )}
                     </div>
                     {(isFav || isHovered) && (
                       <span
@@ -442,6 +492,13 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
               <div className="flex flex-col gap-1.5">
                 <Label>Latest prompt</Label>
                 <PromptBox text={selected.latestPrompt} dim />
+              </div>
+            )}
+
+            {selected.searchSnippet && (
+              <div className="flex flex-col gap-1.5">
+                <Label>Search match</Label>
+                <PromptBox text={selected.searchSnippet} dim />
               </div>
             )}
 

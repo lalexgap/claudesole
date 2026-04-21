@@ -81,6 +81,8 @@ export const useSessionsStore = create<SessionsState>((set) => ({
       sessions: state.sessions.map((s) => s.id === id ? { ...s, pinned: !s.pinned } : s),
     })),
 
+  // `toIndex` is the insert-before position in the original array (drag-and-drop semantics).
+  // Moving [a,b,c] with reorder(a, 2) yields [b, a, c]; pass length (3) to move to the end.
   reorderSession: (id: string, toIndex: number) =>
     set((state) => {
       const from = state.sessions.findIndex((s) => s.id === id)

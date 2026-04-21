@@ -22,7 +22,7 @@ type Item =
   | { type: 'shellFolder'; cwd: string }
   | { type: 'shellBrowse' }
 
-export interface SessionOpts { skipPermissions: boolean; worktree: boolean; branch?: string }
+export interface SessionOpts { skipPermissions: boolean; worktree: boolean; branch?: string; baseBranch?: string }
 
 interface Props {
   onResume: (session: ClaudeSession, opts: SessionOpts) => void
@@ -52,6 +52,9 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
   const [branches, setBranches] = useState<string[]>([])
   const [branchOpen, setBranchOpen] = useState(false)
   const [branchIdx, setBranchIdx] = useState(0)
+  const [baseBranchSearch, setBaseBranchSearch] = useState('')
+  const [baseBranchOpen, setBaseBranchOpen] = useState(false)
+  const [baseBranchIdx, setBaseBranchIdx] = useState(0)
 
   const searchRef = useRef<HTMLInputElement>(null)
   const itemRefs = useRef<Map<number, HTMLDivElement>>(new Map())
@@ -65,6 +68,17 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
   }, [])
 
   const q = query.toLowerCase()
+
+  // If the query contains `*` or `?`, treat it as a glob for folder matching.
+  // `*` → any chars, `?` → single char. Anchored to the full path.
+  const folderMatcher = useMemo(() => {
+    if (!q) return null
+    if (!/[*?]/.test(q)) return (cwd: string) => cwd.toLowerCase().includes(q)
+    const re = new RegExp(
+      '^.*' + q.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '.*$'
+    )
+    return (cwd: string) => re.test(cwd.toLowerCase())
+  }, [q])
 
   const filteredSessions = useMemo(() => sessions.filter(s =>
     !q ||
@@ -90,12 +104,12 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
   ].sort((a, b) => b.session.lastActivity - a.session.lastActivity), [filteredSessions, filteredCodexSessions])
 
   const recentFolders = useMemo(() => [...new Set(sessions.map(s => s.cwd))]
-    .filter(cwd => !q || cwd.toLowerCase().includes(q))
-    .slice(0, 3), [sessions, q])
+    .filter(cwd => !folderMatcher || folderMatcher(cwd))
+    .slice(0, 3), [sessions, folderMatcher])
 
   const recentCodexFolders = useMemo(() => [...new Set(codexSessions.map(s => s.cwd))]
-    .filter(cwd => !q || cwd.toLowerCase().includes(q))
-    .slice(0, 3), [codexSessions, q])
+    .filter(cwd => !folderMatcher || folderMatcher(cwd))
+    .slice(0, 3), [codexSessions, folderMatcher])
 
   const items: Item[] = useMemo(() => [
     ...filteredRecentSessions,
@@ -135,6 +149,21 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
     [branches, branchSearch]
   )
 
+  // User typed something that isn't an existing branch → they're creating a new one.
+  const isNewBranch = !!branchSearch.trim() && !branches.includes(branchSearch.trim())
+  const effectiveBranch = branch || (isNewBranch ? branchSearch.trim() : '')
+  const filteredBaseBranches = useMemo(() =>
+    branches.filter(b => !baseBranchSearch || b.toLowerCase().includes(baseBranchSearch.toLowerCase())),
+    [branches, baseBranchSearch]
+  )
+
+  // Default base branch once we know the repo branches — prefer main/master/current.
+  useEffect(() => {
+    if (!isNewBranch || baseBranchSearch || branches.length === 0) return
+    const preferred = ['main', 'master'].find(n => branches.includes(n)) ?? branches[0]
+    setBaseBranchSearch(preferred)
+  }, [isNewBranch, branches, baseBranchSearch])
+
   useEffect(() => {
     if (worktree && pendingCwd) {
       window.electronAPI.listBranches(pendingCwd).then(bs => { setBranches(bs); setBranchIdx(0) }).catch(() => {})
@@ -160,6 +189,9 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
     setBranch('')
     setBranches([])
     setBranchOpen(false)
+    setBaseBranchSearch('')
+    setBaseBranchOpen(false)
+    setBaseBranchIdx(0)
     setStep('options')
   }
 
@@ -173,10 +205,12 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
 
   const handleStart = useCallback(() => {
     if (!pendingCwd) return
-    const opts = { skipPermissions, worktree, branch: worktree && branch ? branch : undefined }
+    const chosenBranch = worktree ? effectiveBranch || undefined : undefined
+    const chosenBase = worktree && isNewBranch && baseBranchSearch.trim() ? baseBranchSearch.trim() : undefined
+    const opts = { skipPermissions, worktree, branch: chosenBranch, baseBranch: chosenBase }
     if (pendingType === 'codex') onNewCodexInFolder(pendingCwd, opts)
     else onNewInFolder(pendingCwd, opts)
-  }, [pendingCwd, pendingType, skipPermissions, worktree, branch, onNewInFolder, onNewCodexInFolder])
+  }, [pendingCwd, pendingType, skipPermissions, worktree, effectiveBranch, isNewBranch, baseBranchSearch, onNewInFolder, onNewCodexInFolder])
 
   const cycleSection = useCallback((reverse: boolean) => {
     const sections = [
@@ -227,12 +261,19 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
         if (e.key === 'Escape') { e.preventDefault(); setBranchOpen(false) }
         return
       }
+      if (baseBranchOpen) {
+        if (e.key === 'ArrowDown') { e.preventDefault(); setBaseBranchIdx(i => Math.min(i + 1, filteredBaseBranches.length - 1)) }
+        if (e.key === 'ArrowUp') { e.preventDefault(); setBaseBranchIdx(i => Math.max(i - 1, 0)) }
+        if (e.key === 'Enter') { e.preventDefault(); const b = filteredBaseBranches[baseBranchIdx]; if (b) { setBaseBranchSearch(b); setBaseBranchOpen(false) } }
+        if (e.key === 'Escape') { e.preventDefault(); setBaseBranchOpen(false) }
+        return
+      }
       if (e.key === 'Escape') { e.preventDefault(); setStep('pick') }
       if (e.key === 'Enter') { e.preventDefault(); handleStart() }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [step, branchOpen, branchIdx, filteredBranches, handleStart])
+  }, [step, branchOpen, branchIdx, filteredBranches, baseBranchOpen, baseBranchIdx, filteredBaseBranches, handleStart])
 
   const rowCls = (idx: number) => clsx(
     'px-3 py-2 cursor-pointer rounded-md mx-1 my-px',
@@ -460,37 +501,73 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
                   <span className="text-[#777] text-[11px]">--worktree</span>
                 </label>
                 {worktree && (
-                  <div className="relative ml-5">
-                    <input
-                      ref={branchInputRef}
-                      value={branchSearch}
-                      onChange={e => { setBranchSearch(e.target.value); setBranch(''); setBranchOpen(true); setBranchIdx(0) }}
-                      onFocus={() => setBranchOpen(true)}
-                      onBlur={() => setTimeout(() => setBranchOpen(false), 150)}
-                      placeholder="Branch (optional)…"
-                      className={clsx(
-                        'w-full box-border bg-app-600 border border-app-350 rounded text-xs px-2 py-[5px] outline-none',
-                        branch ? 'text-neutral-200' : 'text-[#aaa]'
+                  <div className="ml-5 flex flex-col gap-2">
+                    <div className="relative">
+                      <input
+                        ref={branchInputRef}
+                        value={branchSearch}
+                        onChange={e => { setBranchSearch(e.target.value); setBranch(''); setBranchOpen(true); setBranchIdx(0) }}
+                        onFocus={() => setBranchOpen(true)}
+                        onBlur={() => setTimeout(() => setBranchOpen(false), 150)}
+                        placeholder="Branch (optional)…"
+                        className={clsx(
+                          'w-full box-border bg-app-600 border border-app-350 rounded text-xs px-2 py-[5px] outline-none',
+                          branch ? 'text-neutral-200' : 'text-[#aaa]'
+                        )}
+                      />
+                      {branchOpen && filteredBranches.length > 0 && (
+                        <div
+                          ref={branchListRef}
+                          className="absolute top-[calc(100%+4px)] left-0 right-0 z-10 bg-app-600 border border-app-350 rounded max-h-[140px] overflow-y-auto shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+                        >
+                          {filteredBranches.map((b, i) => (
+                            <div
+                              key={b}
+                              onMouseDown={e => { e.preventDefault(); setBranch(b); setBranchSearch(b); setBranchOpen(false) }}
+                              className={clsx(
+                                'px-2 py-[5px] text-xs cursor-pointer',
+                                i === branchIdx ? 'bg-white/[0.07] text-neutral-200' : 'bg-transparent text-[#aaa]'
+                              )}
+                            >
+                              {b}
+                            </div>
+                          ))}
+                        </div>
                       )}
-                    />
-                    {branchOpen && filteredBranches.length > 0 && (
-                      <div
-                        ref={branchListRef}
-                        className="absolute top-[calc(100%+4px)] left-0 right-0 z-10 bg-app-600 border border-app-350 rounded max-h-[140px] overflow-y-auto shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
-                      >
-                        {filteredBranches.map((b, i) => (
-                          <div
-                            key={b}
-                            onMouseDown={e => { e.preventDefault(); setBranch(b); setBranchSearch(b); setBranchOpen(false) }}
-                            className={clsx(
-                              'px-2 py-[5px] text-xs cursor-pointer',
-                              i === branchIdx ? 'bg-white/[0.07] text-neutral-200' : 'bg-transparent text-[#aaa]'
-                            )}
-                          >
-                            {b}
-                          </div>
-                        ))}
-                      </div>
+                    </div>
+
+                    {isNewBranch && (
+                      <>
+                        <div className="text-[#666] text-[10px] -mb-1">
+                          New branch <span className="text-[#aaa] font-mono">{branchSearch.trim()}</span> will be created from:
+                        </div>
+                        <div className="relative">
+                          <input
+                            value={baseBranchSearch}
+                            onChange={e => { setBaseBranchSearch(e.target.value); setBaseBranchOpen(true); setBaseBranchIdx(0) }}
+                            onFocus={() => setBaseBranchOpen(true)}
+                            onBlur={() => setTimeout(() => setBaseBranchOpen(false), 150)}
+                            placeholder="Base branch…"
+                            className="w-full box-border bg-app-600 border border-app-350 rounded text-xs px-2 py-[5px] outline-none text-neutral-200"
+                          />
+                          {baseBranchOpen && filteredBaseBranches.length > 0 && (
+                            <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-10 bg-app-600 border border-app-350 rounded max-h-[140px] overflow-y-auto shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
+                              {filteredBaseBranches.map((b, i) => (
+                                <div
+                                  key={b}
+                                  onMouseDown={e => { e.preventDefault(); setBaseBranchSearch(b); setBaseBranchOpen(false) }}
+                                  className={clsx(
+                                    'px-2 py-[5px] text-xs cursor-pointer',
+                                    i === baseBranchIdx ? 'bg-white/[0.07] text-neutral-200' : 'bg-transparent text-[#aaa]'
+                                  )}
+                                >
+                                  {b}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
                 )}
@@ -565,9 +642,11 @@ export function NewSessionModal({ onResume, onResumeCodex, onNewInFolder, onNewC
             <>
               <DetailLabel>--worktree</DetailLabel>
               <div className="text-[#666] text-[11px] leading-[1.7]">
-                {worktree && branch
+                {worktree && isNewBranch && baseBranchSearch
+                  ? <>Creates new branch <span className="text-[#aaa]">{branchSearch.trim()}</span> from <span className="text-[#aaa]">{baseBranchSearch}</span> in a worktree at <span className="text-[#aaa]">.claude/worktrees/{branchSearch.trim().replace(/\//g, '-')}</span>.</>
+                  : worktree && branch
                   ? <>Checks out <span className="text-[#aaa]">{branch}</span> in an isolated worktree at <span className="text-[#aaa]">.claude/worktrees/{branch.replace(/\//g, '-')}</span>.</>
-                  : 'Runs Claude in an isolated git worktree. Pick a branch to check it out there, or leave blank for an auto-named branch.'
+                  : 'Runs in an isolated git worktree. Pick an existing branch, type a new branch name (a base branch picker will appear), or leave blank for an auto-named branch.'
                 }
               </div>
             </>

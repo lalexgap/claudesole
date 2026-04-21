@@ -7,7 +7,9 @@ import { createOpenAI } from '@ai-sdk/openai'
 import { getEnv } from './ptyManager'
 import { getSettings } from './settingsManager'
 
-const CACHE_PATH = path.join(os.homedir(), '.claude', 'claudesole-titles.json')
+function cachePath(): string {
+  return process.env.CLAUDESOLE_TITLES_CACHE ?? path.join(os.homedir(), '.claude', 'claudesole-titles.json')
+}
 
 interface CacheEntry { title: string; generatedAt: number }
 type TitleCache = Record<string, CacheEntry>
@@ -15,15 +17,24 @@ type TitleCache = Record<string, CacheEntry>
 let memCache: TitleCache = {}
 let cacheLoaded = false
 
+export function __resetCacheForTests(): void {
+  memCache = {}
+  cacheLoaded = false
+}
+
 function loadCache(): TitleCache {
   if (cacheLoaded) return memCache
-  try { memCache = JSON.parse(fs.readFileSync(CACHE_PATH, 'utf-8')) } catch { memCache = {} }
+  try { memCache = JSON.parse(fs.readFileSync(cachePath(), 'utf-8')) } catch { memCache = {} }
   cacheLoaded = true
   return memCache
 }
 
 function saveCache(): void {
-  try { fs.writeFileSync(CACHE_PATH, JSON.stringify(memCache, null, 2)) } catch {}
+  try {
+    const p = cachePath()
+    fs.mkdirSync(path.dirname(p), { recursive: true })
+    fs.writeFileSync(p, JSON.stringify(memCache, null, 2))
+  } catch {}
 }
 
 export function getCachedTitle(sessionId: string): string | undefined {

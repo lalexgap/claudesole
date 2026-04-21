@@ -1,0 +1,7 @@
+{"type":"summary","summary":"Previous session","leafUuid":"abc"}
+{"cwd":"/Users/test/repo","slug":"claude-sample-slug","sessionId":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","version":"1.0.0","type":"meta"}
+{"type":"user","message":{"role":"user","content":"<system-reminder>injected context</system-reminder>"}}
+{"type":"user","message":{"role":"user","content":"Hello, can you help me refactor this function?"}}
+{"type":"assistant","message":{"role":"assistant","model":"claude-haiku-4-5","content":[{"type":"text","text":"Sure — let's look at the function."}],"usage":{"input_tokens":100,"cache_creation_input_tokens":500,"cache_read_input_tokens":200,"output_tokens":50}}}
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Here's a follow-up question about the refactor."}]}}
+{"type":"assistant","message":{"role":"assistant","model":"claude-haiku-4-5","content":[{"type":"text","text":"Got it — the follow-up is about naming."}],"usage":{"input_tokens":120,"cache_creation_input_tokens":0,"cache_read_input_tokens":800,"output_tokens":60}}}

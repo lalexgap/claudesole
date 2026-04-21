@@ -32,6 +32,7 @@ export function useTerminal(
   const suppressRunningUntil = useRef(0)
   const claudeRespondedRef = useRef(false) // true only when Claude (not echo) sent data since last idle
   const userActedRef = useRef(false) // true after user types; gates notification reset
+  const lastNotifiedAtRef = useRef(0) // rate-limit per-session notifications
   const onCmdFRef = useRef(onCmdF)
   const onCmdKRef = useRef(onCmdK)
   const markRunningRef = useRef(markRunning)
@@ -126,30 +127,34 @@ export function useTerminal(
       window.electronAPI.writeSession(sessionId, data)
       // Suppress green flash: echoes of user input arrive within ~10ms
       suppressRunningUntil.current = Date.now() + 150
-      userActedRef.current = true
       if (!hasMarkedUserTypedRef.current) {
         hasMarkedUserTypedRef.current = true
         setUserHasTyped(sessionId)
       }
-      // Capture the user's first prompt from keystrokes so title generation
-      // doesn't need to read from disk (avoids same-cwd race conditions).
-      if (!hasSetFirstPromptRef.current) {
-        for (const char of data) {
-          if (char === '\r' || char === '\n') {
-            if (inputBuffer.trim()) {
+      // Feed every keystroke through the line-buffer parser so we can
+      //   (a) capture the first prompt for title generation, and
+      //   (b) arm `userActedRef` only on an actual submission (Enter with
+      //       a non-empty buffer). Bare Enter / arrows / tool-approval
+      //       keypresses don't count — otherwise each approval re-arms
+      //       the notification gate.
+      for (const char of data) {
+        if (char === '\r' || char === '\n') {
+          const trimmed = inputBuffer.trim()
+          if (trimmed.length > 0) {
+            userActedRef.current = true
+            if (!hasSetFirstPromptRef.current) {
               hasSetFirstPromptRef.current = true
-              setFirstPrompt(sessionId, inputBuffer.trim())
+              setFirstPrompt(sessionId, trimmed)
             }
-            inputBuffer = ''
-            break
-          } else if (char === '\x7f') {
-            inputBuffer = inputBuffer.slice(0, -1)
-          } else if (char === '\x03' || char === '\x1b') {
-            inputBuffer = ''
-            break
-          } else if (char.charCodeAt(0) >= 32) {
-            inputBuffer += char
           }
+          inputBuffer = ''
+        } else if (char === '\x7f') {
+          inputBuffer = inputBuffer.slice(0, -1)
+        } else if (char === '\x03' || char === '\x1b') {
+          inputBuffer = ''
+          break
+        } else if (char.charCodeAt(0) >= 32) {
+          inputBuffer += char
         }
       }
     })
@@ -176,21 +181,28 @@ export function useTerminal(
       }
 
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
+      // 4s threshold: Claude's spinner + tool calls routinely pause multiple
+      // seconds mid-response; a shorter timeout produces spurious red/green
+      // flicker and premature "waiting" notifications.
       idleTimerRef.current = setTimeout(() => {
         markWaitingRef.current(id)
+        const now = Date.now()
+        const SINCE_LAST_NOTIFY_MS = 30_000
         const shouldNotify =
           !isShellRef.current &&
           claudeRespondedRef.current &&
           !notifiedIdleRef.current &&
           (!isActiveRef.current || !document.hasFocus()) &&
-          Notification.permission === 'granted'
+          Notification.permission === 'granted' &&
+          now - lastNotifiedAtRef.current > SINCE_LAST_NOTIFY_MS
         claudeRespondedRef.current = false
         if (shouldNotify) {
           const label = useSessionsStore.getState().sessions.find(s => s.id === id)?.label ?? 'Claude'
           new Notification('Claude is waiting', { body: `${label} finished and is waiting for input`, silent: false })
           notifiedIdleRef.current = true
+          lastNotifiedAtRef.current = now
         }
-      }, 500)
+      }, 4000)
     })
 
     const resizeObserver = new ResizeObserver(() => {

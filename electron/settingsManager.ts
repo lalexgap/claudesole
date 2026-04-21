@@ -2,7 +2,9 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 
-const SETTINGS_PATH = path.join(os.homedir(), '.claude', 'claudesole-settings.json')
+function settingsPath(): string {
+  return process.env.CLAUDESOLE_SETTINGS_PATH ?? path.join(os.homedir(), '.claude', 'claudesole-settings.json')
+}
 
 export interface AppSettings {
   titleProvider: 'anthropic' | 'openai-compatible' | 'none'
@@ -20,13 +22,14 @@ const defaults: AppSettings = {
 
 export function getSettings(): AppSettings {
   try {
-    return { ...defaults, ...JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8')) }
+    return { ...defaults, ...JSON.parse(fs.readFileSync(settingsPath(), 'utf-8')) }
   } catch {
     return { ...defaults }
   }
 }
 
 export function saveSettings(s: AppSettings): void {
-  fs.mkdirSync(path.dirname(SETTINGS_PATH), { recursive: true })
-  fs.writeFileSync(SETTINGS_PATH, JSON.stringify(s, null, 2))
+  const p = settingsPath()
+  fs.mkdirSync(path.dirname(p), { recursive: true })
+  fs.writeFileSync(p, JSON.stringify(s, null, 2))
 }

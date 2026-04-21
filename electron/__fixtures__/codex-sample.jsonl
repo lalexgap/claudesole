@@ -1,0 +1,5 @@
+{"type":"session_meta","payload":{"id":"cccccccc-cccc-cccc-cccc-cccccccccccc","cwd":"/Users/test/codex-repo","slug":"codex-sample-slug"}}
+{"type":"turn_context","payload":{"cwd":"/Users/test/codex-repo","model":"gpt-5"}}
+{"type":"event_msg","payload":{"type":"user_message","message":"Codex: first user prompt"}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Codex assistant reply"}]}}
+{"type":"event_msg","payload":{"type":"user_message","message":"Codex: last user prompt"}}
