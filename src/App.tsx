@@ -10,6 +10,9 @@ import { PaneNode, splitLeaf, removeFromTree, getLeafIds, computeLayout, updateR
 import { QuickSwitcher } from './components/QuickSwitcher'
 import { WorktreePanel } from './components/WorktreePanel'
 import { SettingsPanel } from './components/SettingsPanel'
+import { ToastStack } from './components/ToastStack'
+import { ConfirmDialog } from './components/ConfirmDialog'
+import { toast, confirm } from './store/ui'
 import { ClaudeSession, CodexSession } from './types/ipc'
 import type { HistorySession } from './components/SessionHistoryPanel'
 
@@ -91,7 +94,7 @@ export default function App() {
         try {
           sessionCwd = await window.electronAPI.createWorktree(cwd, opts.branch, opts.baseBranch)
         } catch (err) {
-          alert(`Failed to create worktree: ${err instanceof Error ? err.message : err}`)
+          toast.error(`Failed to create worktree: ${err instanceof Error ? err.message : err}`)
           return ''
         }
       } else {
@@ -134,7 +137,7 @@ export default function App() {
       try {
         sessionCwd = await window.electronAPI.createWorktree(cwd, opts.branch)
       } catch (err) {
-        alert(`Failed to create worktree: ${err instanceof Error ? err.message : err}`)
+        toast.error(`Failed to create worktree: ${err instanceof Error ? err.message : err}`)
         return ''
       }
     }
@@ -167,10 +170,15 @@ export default function App() {
     if (pendingSplit && sessionId) handleSplitWithNew(sessionId)
   }
 
-  const handleCloseTab = useCallback((id: string) => {
+  const handleCloseTab = useCallback(async (id: string) => {
     const session = sessions.find(s => s.id === id)
     if (session?.status === 'running') {
-      const ok = window.confirm(`Close "${session.label}"? Claude may still be running.`)
+      const ok = await confirm({
+        title: 'Close session?',
+        message: `"${session.label}" may still be running.`,
+        confirmLabel: 'Close',
+        tone: 'danger',
+      })
       if (!ok) return
     }
 
@@ -215,7 +223,7 @@ export default function App() {
   // Close a single pane within a split (or fall through to the regular tab
   // close for a non-split session). If the primary of a split is closed, a
   // remaining leaf is promoted to primary so the split tree stays intact.
-  const handleClosePane = (paneId: string) => {
+  const handleClosePane = async (paneId: string) => {
     let primaryId: string | null = null
     for (const [pid, root] of paneRoots) {
       if (getLeafIds(root).includes(paneId)) { primaryId = pid; break }
@@ -224,7 +232,12 @@ export default function App() {
 
     const session = sessions.find(s => s.id === paneId)
     if (session?.status === 'running') {
-      const ok = window.confirm(`Close "${session.label}"? Claude may still be running.`)
+      const ok = await confirm({
+        title: 'Close pane?',
+        message: `"${session.label}" may still be running.`,
+        confirmLabel: 'Close',
+        tone: 'danger',
+      })
       if (!ok) return
     }
 
@@ -483,6 +496,7 @@ export default function App() {
   }, [sessions, clearAiTitle])
 
   return (
+    <>
     <div className="flex flex-col w-full h-full">
       <TabBar
         sessions={tabSessions}
@@ -654,5 +668,8 @@ export default function App() {
         />
       )}
     </div>
+    <ToastStack />
+    <ConfirmDialog />
+    </>
   )
 }
