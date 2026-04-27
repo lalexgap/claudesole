@@ -93,6 +93,25 @@ export function useTerminal(
       }
     }
     container.addEventListener('mousedown', onMouseDown)
+
+    // xterm preserves the cell grid in selections, so TUI padding (boxes,
+    // backgrounds) leaks into the clipboard as trailing spaces and blank
+    // lines. Rewrite the clipboard payload on copy when the selection
+    // originated inside this terminal.
+    const onCopy = (e: ClipboardEvent) => {
+      if (!container.contains(document.activeElement) && !container.contains((e.target as Node) ?? null)) return
+      const selection = term.getSelection()
+      if (!selection) return
+      const cleaned = selection
+        .split('\n')
+        .map((line) => line.replace(/[ \t]+$/, ''))
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+      e.clipboardData?.setData('text/plain', cleaned)
+      e.preventDefault()
+    }
+    document.addEventListener('copy', onCopy)
+
     fitAddon.fit()
 
     handleRef.current = {
@@ -225,6 +244,7 @@ export function useTerminal(
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
       resizeObserver.disconnect()
       container.removeEventListener('mousedown', onMouseDown)
+      document.removeEventListener('copy', onCopy)
       term.dispose()
     }
   }, [sessionId])
