@@ -37,6 +37,7 @@ export interface ClaudeSession {
   model?: string
   title?: string
   summary?: string
+  recap?: string
 }
 
 export interface SessionSearchHit {
@@ -69,7 +70,7 @@ export interface ElectronAPI {
   openExternal: (url: string) => void
   getLatestSession: (cwd: string) => Promise<ClaudeSession | null>
   getSessionById: (sessionId: string) => Promise<ClaudeSession | null>
-  generateSessionTitle: (sessionId: string, firstPrompt: string, latestPrompt?: string) => Promise<string | null>
+  generateSessionTitle: (sessionId: string, firstPrompt: string, latestPrompt?: string, claudeSessionId?: string, cwd?: string) => Promise<string | null>
   generateSessionSummary: (sessionId: string, firstPrompt: string, latestPrompt?: string) => Promise<string | null>
   clearTitleCache: (sessionId: string) => Promise<void>
   clearAllTitleCache: () => Promise<void>

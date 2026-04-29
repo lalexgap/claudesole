@@ -196,8 +196,12 @@ function setupIpcHandlers() {
     }
   })
 
-  ipcMain.handle('title:generate', (_e, { sessionId, firstPrompt, latestPrompt }: { sessionId: string; firstPrompt: string; latestPrompt?: string }) =>
-    generateTitle(sessionId, firstPrompt, latestPrompt))
+  ipcMain.handle('title:generate', (_e, { sessionId, firstPrompt, latestPrompt, claudeSessionId, cwd }: { sessionId: string; firstPrompt: string; latestPrompt?: string; claudeSessionId?: string; cwd?: string }) => {
+    let recap: string | undefined
+    if (claudeSessionId) recap = sessionById(claudeSessionId)?.recap
+    if (!recap && cwd) recap = latestSessionForCwd(cwd)?.recap
+    return generateTitle(sessionId, firstPrompt, latestPrompt, recap)
+  })
 
   ipcMain.handle('title:clearCache', (_e, sessionId: string) => {
     clearTitleCache(sessionId)

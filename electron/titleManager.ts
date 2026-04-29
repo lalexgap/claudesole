@@ -117,7 +117,7 @@ export async function generateSummary(
 }
 
 export async function generateTitle(
-  sessionId: string, firstPrompt: string, latestPrompt?: string
+  sessionId: string, firstPrompt: string, latestPrompt?: string, recap?: string
 ): Promise<string | null> {
   const cached = getCachedTitle(sessionId)
   if (cached) return cached
@@ -129,7 +129,12 @@ export async function generateTitle(
     const apiKey = resolveApiKey(settings.apiKey)
     if (!apiKey) return null
 
-    const context = latestPrompt && latestPrompt !== firstPrompt
+    // Recap (CLI-emitted post-/compact or fork summary) is the highest-quality
+    // signal available — it summarizes the entire session, not just the first/last turn.
+    const trimmedRecap = recap?.trim()
+    const context = trimmedRecap
+      ? `Session recap: "${trimmedRecap.slice(0, 800)}"`
+      : latestPrompt && latestPrompt !== firstPrompt
       ? `Opening message: "${firstPrompt.slice(0, 300)}"\nLatest message: "${latestPrompt.slice(0, 200)}"`
       : `"${firstPrompt.slice(0, 500)}"`
     const prompt = `Generate a title (5 words or less, no punctuation, no quotes) for a Claude Code session (an AI coding assistant). ${context}. Reply with only the title.`

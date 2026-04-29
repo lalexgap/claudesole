@@ -15,6 +15,9 @@ export interface ClaudeSession {
   model?: string
   title?: string
   summary?: string
+  // Native CLI-emitted recap from {"type":"summary"} JSONL lines (forks, /compact).
+  // Latest one wins when multiple are present.
+  recap?: string
 }
 
 function extractText(content: unknown): string {
@@ -30,7 +33,7 @@ function extractText(content: unknown): string {
   return ''
 }
 
-export function parseFile(filePath: string, fileSize: number): { cwd?: string; slug?: string; firstPrompt?: string; latestPrompt?: string; tokensUsed?: number; model?: string } {
+export function parseFile(filePath: string, fileSize: number): { cwd?: string; slug?: string; firstPrompt?: string; latestPrompt?: string; tokensUsed?: number; model?: string; recap?: string } {
   try {
     const HEAD = 16384
     let headBuf: Buffer
@@ -46,6 +49,7 @@ export function parseFile(filePath: string, fileSize: number): { cwd?: string; s
     let cwd: string | undefined
     let slug: string | undefined
     let firstPrompt: string | undefined
+    let headRecap: string | undefined
 
     for (const line of headBuf.slice(0, headN).toString('utf-8').split('\n')) {
       if (!line.trim()) continue
@@ -58,14 +62,21 @@ export function parseFile(filePath: string, fileSize: number): { cwd?: string; s
           // Skip system-injected messages (caveat notices, tool context) which are wrapped in XML tags
           if (text && !text.startsWith('<')) firstPrompt = text
         }
+        if (obj.type === 'summary' && typeof obj.summary === 'string' && obj.summary.trim()) {
+          // A later summary in the head replaces an earlier one (rare in practice).
+          headRecap = obj.summary.trim()
+        }
         if (cwd && slug && firstPrompt) break
       } catch {}
     }
 
-    // Reverse-chunk scan for latest user message + token usage.
-    const { latestPrompt, tokensUsed, model } = findTailData(filePath, fileSize)
+    // Reverse-chunk scan for latest user message + token usage + recap.
+    const { latestPrompt, tokensUsed, model, recap: tailRecap } = findTailData(filePath, fileSize)
 
-    return { cwd, slug, firstPrompt, latestPrompt, tokensUsed, model }
+    // Tail recap (closer to EOF / chronologically latest) wins over head recap.
+    const recap = tailRecap ?? headRecap
+
+    return { cwd, slug, firstPrompt, latestPrompt, tokensUsed, model, recap }
   } catch {
     return {}
   }
@@ -75,6 +86,7 @@ interface TailData {
   latestPrompt?: string
   tokensUsed?: number
   model?: string
+  recap?: string
 }
 
 export function findTailData(filePath: string, fileSize: number): TailData {
@@ -83,6 +95,8 @@ export function findTailData(filePath: string, fileSize: number): TailData {
   let carry = ''
   const result: TailData = {}
 
+  // Recap is captured opportunistically — we don't extend the scan to find one,
+  // since most sessions have no recap and we'd otherwise read the whole file.
   const done = () => result.latestPrompt !== undefined && result.tokensUsed !== undefined
 
   const processLine = (line: string) => {
@@ -105,6 +119,10 @@ export function findTailData(filePath: string, fileSize: number): TailData {
           if (!result.model && obj.message?.model) result.model = obj.message.model as string
         }
       }
+      if (result.recap === undefined && obj.type === 'summary' && typeof obj.summary === 'string' && obj.summary.trim()) {
+        // First summary encountered while walking bottom-up = chronologically latest.
+        result.recap = obj.summary.trim()
+      }
     } catch {}
   }
 
@@ -122,9 +140,12 @@ export function findTailData(filePath: string, fileSize: number): TailData {
         const lines = text.split('\n')
         carry = lines[0]
 
+        // Process every line in the chunk we already read — recap may sit a
+        // few lines earlier than the latest user msg (post-/compact sessions),
+        // and bailing on done() would miss it. The outer loop still exits on
+        // done() so we don't pay for chunks we don't need.
         for (let i = lines.length - 1; i >= 1; i--) {
           processLine(lines[i])
-          if (done()) break
         }
       }
 
@@ -190,7 +211,7 @@ function _listClaudeSessions(): ClaudeSession[] {
         continue
       }
 
-      const { cwd, slug, firstPrompt, latestPrompt, tokensUsed, model } = parseFile(filePath, fileSize)
+      const { cwd, slug, firstPrompt, latestPrompt, tokensUsed, model, recap } = parseFile(filePath, fileSize)
       if (!cwd) continue
 
       const sessionId = file.name.replace('.jsonl', '')
@@ -204,6 +225,7 @@ function _listClaudeSessions(): ClaudeSession[] {
         latestPrompt: latestPrompt || '',
         tokensUsed,
         model,
+        recap,
       })
     }
   }
@@ -287,7 +309,7 @@ export function sessionById(sessionId: string): ClaudeSession | null {
     const fp = path.join(projectsDir, entry.name, `${sessionId}.jsonl`)
     let stat: fs.Stats
     try { stat = fs.statSync(fp) } catch { continue }
-    const { cwd, slug, firstPrompt, latestPrompt, tokensUsed, model } = parseFile(fp, stat.size)
+    const { cwd, slug, firstPrompt, latestPrompt, tokensUsed, model, recap } = parseFile(fp, stat.size)
     if (!cwd) return null
     return {
       sessionId,
@@ -299,6 +321,7 @@ export function sessionById(sessionId: string): ClaudeSession | null {
       latestPrompt: latestPrompt || '',
       tokensUsed,
       model,
+      recap,
     }
   }
   return null

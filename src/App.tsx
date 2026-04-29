@@ -446,9 +446,11 @@ export default function App() {
       if (!prompt) continue
       if (titledSessionIds.current.has(session.id)) continue
       titledSessionIds.current.add(session.id)
-      const tabId = session.id;
+      const tabId = session.id
+      const claudeId = session.claudeSessionId
+      const cwd = session.cwd;
       (async () => {
-        const title = await window.electronAPI.generateSessionTitle(tabId, prompt)
+        const title = await window.electronAPI.generateSessionTitle(tabId, prompt, undefined, claudeId, cwd)
         if (title) {
           setAiTitle(tabId, title)
           lastRegenerateRef.current[tabId] = Date.now()
@@ -474,7 +476,7 @@ export default function App() {
           const latestPrompt = target?.latestPrompt || undefined
           await window.electronAPI.clearTitleCache(session.claudeSessionId ?? session.id)
           await window.electronAPI.clearTitleCache(session.id)
-          const title = await window.electronAPI.generateSessionTitle(session.id, session.firstPrompt, latestPrompt)
+          const title = await window.electronAPI.generateSessionTitle(session.id, session.firstPrompt, latestPrompt, session.claudeSessionId, session.cwd)
           if (title) setAiTitle(session.id, title)
         } catch {}
       }

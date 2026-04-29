@@ -51,6 +51,18 @@ describe('parseFile (head)', () => {
     expect(parseFile(p, size).firstPrompt).toBe('array-form prompt')
   })
 
+  it('captures a recap from the head of a forked session', () => {
+    // Forks emit the previous-session summary as the very first line; the head
+    // scan should capture it even when no summary appears later.
+    const { path: p, size } = writeFixture([
+      { type: 'summary', summary: 'Carried-over context from prior session', leafUuid: 'abc' },
+      { cwd: '/x', slug: 's' },
+      { type: 'user', message: { content: 'continuing the work' } },
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'ok' }], usage: { input_tokens: 1 } } },
+    ])
+    expect(parseFile(p, size).recap).toBe('Carried-over context from prior session')
+  })
+
   it('does not throw on an empty file', () => {
     const p = path.join(tmpDir, 'empty.jsonl')
     fs.writeFileSync(p, '')
@@ -82,6 +94,28 @@ describe('findTailData', () => {
       { type: 'assistant', message: { content: [{ type: 'text', text: 'ok' }], usage: { input_tokens: 42 } } },
     ])
     expect(findTailData(p, size).tokensUsed).toBe(42)
+  })
+
+  it('captures the latest CLI-emitted recap (summary record)', () => {
+    const { path: p, size } = writeFixture([
+      { cwd: '/x', slug: 's' },
+      { type: 'user', message: { content: 'first prompt' } },
+      { type: 'summary', summary: 'older recap', leafUuid: 'a' },
+      { type: 'user', message: { content: 'mid prompt' } },
+      { type: 'summary', summary: 'latest recap', leafUuid: 'b' },
+      { type: 'user', message: { content: 'most recent prompt' } },
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'ok' }], usage: { input_tokens: 1 } } },
+    ])
+    expect(findTailData(p, size).recap).toBe('latest recap')
+  })
+
+  it('returns recap=undefined when no summary records exist', () => {
+    const { path: p, size } = writeFixture([
+      { cwd: '/x', slug: 's' },
+      { type: 'user', message: { content: 'hi' } },
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'ok' }], usage: { input_tokens: 1 } } },
+    ])
+    expect(findTailData(p, size).recap).toBeUndefined()
   })
 
   it('survives a multi-byte UTF-8 character near the chunk boundary', () => {
