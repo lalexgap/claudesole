@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import clsx from 'clsx'
 import { Session } from '../store/sessions'
-import { ClaudeSession, Worktree } from '../types/ipc'
+import { ClaudeSession, CodexSession, Worktree } from '../types/ipc'
 import { confirm as confirmDialog, toast } from '../store/ui'
 
 interface Props {
@@ -45,29 +45,72 @@ export function WorktreePanel({ sessions, onOpenSession, onClose }: Props) {
   const openCwds = useMemo(() => new Set(sessions.map(s => s.cwd)), [sessions])
   const sessionByCwd = useMemo(() => new Map(sessions.map(s => [s.cwd, s])), [sessions])
 
-  // Re-fetch worktrees when the set of cwds changes (not on every status update).
-  const cwdKey = [...new Set(sessions.map(s => s.cwd))].sort().join('|')
+  // Search worktrees across every cwd we know about — live sessions plus
+  // historical ones — so the panel works even before the user opens anything.
+  const cwdKey = useMemo(() => {
+    const set = new Set<string>()
+    for (const s of sessions) set.add(s.cwd)
+    for (const s of allSessions) set.add(s.cwd)
+    return [...set].sort().join('|')
+  }, [sessions, allSessions])
 
   useEffect(() => { searchRef.current?.focus() }, [])
 
   useEffect(() => {
     let cancelled = false
+    Promise.all([
+      window.electronAPI.listSessions().catch(() => [] as ClaudeSession[]),
+      window.electronAPI.listCodexSessions().catch(() => [] as CodexSession[]),
+    ]).then(([claude, codex]) => {
+      if (cancelled) return
+      // Reuse ClaudeSession shape locally — we only need cwd/lastActivity.
+      const merged: ClaudeSession[] = [
+        ...claude,
+        ...codex.map(c => ({ ...c, projectName: c.projectName, recap: undefined } as ClaudeSession)),
+      ]
+      setAllSessions(merged)
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
     async function load() {
       setLoading(true)
-      const uniqueCwds = [...new Set(sessions.map(s => s.cwd))]
+
+      // Recompute cwds inside the effect to avoid a stale closure.
+      const cwdSet = new Set<string>()
+      for (const s of sessions) cwdSet.add(s.cwd)
+      for (const s of allSessions) cwdSet.add(s.cwd)
+      const cwds = [...cwdSet]
+
+      // Sequential dedup: once we've discovered a worktree path P, any cwd
+      // inside P (including main worktrees / repo roots) yields the same
+      // `git worktree list` output, so we skip it. This typically reduces
+      // hundreds of historical cwds to a handful of git invocations.
+      const seenPaths = new Set<string>()
       const allWts: Worktree[] = []
-      await Promise.all(uniqueCwds.map(async (cwd) => {
+
+      for (const cwd of cwds) {
+        if (cancelled) return
+        let inKnown = false
+        for (const known of seenPaths) {
+          if (cwd === known || cwd.startsWith(known + '/')) { inKnown = true; break }
+        }
+        if (inKnown) continue
         try {
           const wts = await window.electronAPI.listWorktrees(cwd)
-          allWts.push(...wts)
+          for (const wt of wts) {
+            if (seenPaths.has(wt.path)) continue
+            seenPaths.add(wt.path)
+            allWts.push(wt)
+          }
         } catch {}
-      }))
+      }
 
-      const seen = new Set<string>()
       const byRepo = new Map<string, Worktree[]>()
       for (const wt of allWts) {
-        if (wt.isMain || seen.has(wt.path)) continue
-        seen.add(wt.path)
+        if (wt.isMain) continue
         const list = byRepo.get(wt.repoRoot) ?? []
         list.push(wt)
         byRepo.set(wt.repoRoot, list)
@@ -83,14 +126,6 @@ export function WorktreePanel({ sessions, onOpenSession, onClose }: Props) {
     load()
     return () => { cancelled = true }
   }, [cwdKey])
-
-  useEffect(() => {
-    let cancelled = false
-    window.electronAPI.listSessions()
-      .then(s => { if (!cancelled) setAllSessions(s) })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
