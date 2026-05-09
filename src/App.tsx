@@ -17,7 +17,7 @@ import { ClaudeSession, CodexSession } from './types/ipc'
 import type { HistorySession } from './components/SessionHistoryPanel'
 
 export default function App() {
-  const { sessions, activeId, addSession, removeSession, setActive, renameSession, togglePin, setAiTitle, clearAiTitle } = useSessionsStore()
+  const { sessions, activeId, addSession, removeSession, setActive, renameSession, togglePin, setAiTitle, clearAiTitle, setBranch } = useSessionsStore()
   const [showModal, setShowModal] = useState(false)
   const [showSidebar, setShowSidebar] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
@@ -115,6 +115,7 @@ export default function App() {
     }
 
     const sessionId = addSession(sessionCwd, resumeOpts?.firstPrompt, undefined, resumeOpts?.claudeSessionId, 'claude', isWorktree)
+    if (gitInfo?.branch) setBranch(sessionId, gitInfo.branch)
     window.electronAPI.createSession(sessionId, sessionCwd, resumeOpts?.claudeSessionId, opts.skipPermissions, worktreeArg)
     return sessionId
   }
@@ -154,6 +155,7 @@ export default function App() {
     }
 
     const sessionId = addSession(sessionCwd, resumeOpts?.firstPrompt, undefined, undefined, 'codex', isWorktree, resumeOpts?.codexSessionId)
+    if (gitInfo?.branch) setBranch(sessionId, gitInfo.branch)
     window.electronAPI.createCodexSession(sessionId, sessionCwd, resumeOpts?.codexSessionId, opts.skipPermissions, resumeOpts?.forkSession)
     return sessionId
   }
@@ -484,6 +486,26 @@ export default function App() {
     const interval = setInterval(tick, 60 * 1000)
     return () => clearInterval(interval)
   }, [setAiTitle])
+
+  // Keep each session's branch label fresh — refetched on creation and every 30s
+  // so tab labels follow `git checkout` in the underlying worktree.
+  useEffect(() => {
+    let cancelled = false
+    const refresh = async () => {
+      const current = useSessionsStore.getState().sessions
+      for (const session of current) {
+        try {
+          const info = await window.electronAPI.getGitInfo(session.cwd)
+          if (cancelled) return
+          const next = info?.branch ?? null
+          if (next !== (session.branch ?? null)) setBranch(session.id, next)
+        } catch {}
+      }
+    }
+    refresh()
+    const interval = setInterval(refresh, 30 * 1000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [sessions.length, setBranch])
 
   const handleRegenerateTitle = useCallback(async (id: string) => {
     const session = sessions.find(s => s.id === id)

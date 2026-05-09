@@ -133,7 +133,7 @@ export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename,
             {splitLabel ?? (() => {
               const defaultLabel = session.cwd.split('/').pop() || session.cwd
               const userRenamed = session.label !== defaultLabel
-              return userRenamed ? session.label : (session.aiTitle || session.label)
+              return userRenamed ? session.label : (session.branch || session.label)
             })()}
           </span>
         )}

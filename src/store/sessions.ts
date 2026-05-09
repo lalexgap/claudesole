@@ -15,6 +15,7 @@ export interface Session {
   codexSessionId?: string // the Codex-assigned session UUID (known for resumed sessions)
   isWorktree?: boolean
   aiTitle?: string
+  branch?: string | null
   userHasTyped?: boolean  // true once the user has sent input in this tab session
 }
 
@@ -31,6 +32,7 @@ interface SessionsState {
   reorderSession: (id: string, toIndex: number) => void
   setAiTitle: (id: string, title: string) => void
   clearAiTitle: (id: string) => void
+  setBranch: (id: string, branch: string | null) => void
   setUserHasTyped: (id: string) => void
   setFirstPrompt: (id: string, prompt: string) => void
 }
@@ -101,6 +103,11 @@ export const useSessionsStore = create<SessionsState>((set) => ({
   clearAiTitle: (id: string) =>
     set((state) => ({
       sessions: state.sessions.map((s) => s.id === id ? { ...s, aiTitle: undefined } : s),
+    })),
+
+  setBranch: (id: string, branch: string | null) =>
+    set((state) => ({
+      sessions: state.sessions.map((s) => s.id === id ? { ...s, branch } : s),
     })),
 
   setUserHasTyped: (id: string) =>
