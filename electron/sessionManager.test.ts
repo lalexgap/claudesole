@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { parseFile, findTailData } from './sessionManager'
+import { parseFile, findTailData, isSlashCommandOnly } from './sessionManager'
 
 let tmpDir: string
 
@@ -20,6 +20,31 @@ function writeFixture(lines: unknown[]): { path: string; size: number } {
   fs.writeFileSync(p, content)
   return { path: p, size: fs.statSync(p).size }
 }
+
+describe('isSlashCommandOnly', () => {
+  it('matches bare slash-command invocations', () => {
+    expect(isSlashCommandOnly('/babysit-pr')).toBe(true)
+    expect(isSlashCommandOnly('/review')).toBe(true)
+    expect(isSlashCommandOnly('/security-review')).toBe(true)
+  })
+
+  it('matches slash commands with a short arg or two', () => {
+    expect(isSlashCommandOnly('/init')).toBe(true)
+    expect(isSlashCommandOnly('/babysit-pr 1234')).toBe(true)
+    expect(isSlashCommandOnly('/loop 5m /foo')).toBe(true)
+  })
+
+  it('rejects messages with prose after the command', () => {
+    expect(isSlashCommandOnly('/review please focus on the auth flow we built')).toBe(false)
+    expect(isSlashCommandOnly('/init project with extra context here')).toBe(false)
+  })
+
+  it('rejects ordinary prose', () => {
+    expect(isSlashCommandOnly('refactor the auth flow')).toBe(false)
+    expect(isSlashCommandOnly('Help me with the babysit-pr workflow')).toBe(false)
+    expect(isSlashCommandOnly('')).toBe(false)
+  })
+})
 
 describe('parseFile (head)', () => {
   it('extracts cwd, slug, and firstPrompt from the head', () => {
@@ -116,6 +141,20 @@ describe('findTailData', () => {
       { type: 'assistant', message: { content: [{ type: 'text', text: 'ok' }], usage: { input_tokens: 1 } } },
     ])
     expect(findTailData(p, size).recap).toBeUndefined()
+  })
+
+  it('skips trailing slash-command-only user messages and walks back to a real prompt', () => {
+    const { path: p, size } = writeFixture([
+      { cwd: '/x', slug: 's' },
+      { type: 'user', message: { content: 'first task: refactor the auth flow' } },
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'ok' }], usage: { input_tokens: 1 } } },
+      { type: 'user', message: { content: 'add the redirect after login' } },
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'done' }], usage: { input_tokens: 2 } } },
+      { type: 'user', message: { content: '/babysit-pr' } },
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'reviewing' }], usage: { input_tokens: 3 } } },
+    ])
+    const tail = findTailData(p, size)
+    expect(tail.latestPrompt).toBe('add the redirect after login')
   })
 
   it('survives a multi-byte UTF-8 character near the chunk boundary', () => {

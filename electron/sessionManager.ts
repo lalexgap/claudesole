@@ -33,6 +33,20 @@ function extractText(content: unknown): string {
   return ''
 }
 
+// Pure slash-command invocations (`/babysit-pr`, `/review`, `/loop 5m /foo`)
+// are meta-instructions, not the actual task. Skip them when picking the
+// "latest user prompt" so a session that ends with `/babysit-pr` still gets
+// titled by the work that preceded it.
+export function isSlashCommandOnly(text: string): boolean {
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('/')) return false
+  if (trimmed.length > 60) return false
+  const tokens = trimmed.split(/\s+/)
+  // Allow up to 3 short tokens — that covers `/cmd`, `/cmd arg`, `/loop 5m /foo`,
+  // but rejects `/review please focus on the auth flow we worked on`.
+  return tokens.length <= 3 && /^\/[a-z][a-z0-9_:-]*$/i.test(tokens[0])
+}
+
 export function parseFile(filePath: string, fileSize: number): { cwd?: string; slug?: string; firstPrompt?: string; latestPrompt?: string; tokensUsed?: number; model?: string; recap?: string } {
   try {
     const HEAD = 16384
@@ -106,7 +120,7 @@ export function findTailData(filePath: string, fileSize: number): TailData {
       const obj = JSON.parse(trimmed)
       if (result.latestPrompt === undefined && obj.type === 'user') {
         const t = extractText(obj.message?.content)
-        if (t && !t.startsWith('<')) result.latestPrompt = t
+        if (t && !t.startsWith('<') && !isSlashCommandOnly(t)) result.latestPrompt = t
       }
       if (result.tokensUsed === undefined && obj.type === 'assistant') {
         const usage = obj.message?.usage

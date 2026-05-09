@@ -129,15 +129,28 @@ export async function generateTitle(
     const apiKey = resolveApiKey(settings.apiKey)
     if (!apiKey) return null
 
-    // Recap (CLI-emitted post-/compact or fork summary) is the highest-quality
-    // signal available — it summarizes the entire session, not just the first/last turn.
+    // Anchor the title on the original task, not end-of-session activity.
+    // Order signals from most-canonical to least:
+    //   1. Opening message (what the session was created to do)
+    //   2. Recap (CLI-emitted /compact or fork summary — running understanding)
+    //   3. Latest message (lowest priority, often shifts to PR review / housekeeping)
     const trimmedRecap = recap?.trim()
-    const context = trimmedRecap
-      ? `Session recap: "${trimmedRecap.slice(0, 800)}"`
-      : latestPrompt && latestPrompt !== firstPrompt
-      ? `Opening message: "${firstPrompt.slice(0, 300)}"\nLatest message: "${latestPrompt.slice(0, 200)}"`
-      : `"${firstPrompt.slice(0, 500)}"`
-    const prompt = `Generate a title (5 words or less, no punctuation, no quotes) for a Claude Code session (an AI coding assistant). ${context}. Reply with only the title.`
+    const trimmedLatest = latestPrompt?.trim()
+    const useLatest = !!trimmedLatest
+      && trimmedLatest !== firstPrompt.trim()
+      && trimmedLatest !== trimmedRecap
+
+    const parts: string[] = []
+    parts.push(`The session opened with: "${firstPrompt.slice(0, 500)}"`)
+    if (trimmedRecap) parts.push(`Running summary so far: "${trimmedRecap.slice(0, 600)}"`)
+    if (useLatest && trimmedLatest) parts.push(`The latest message was: "${trimmedLatest.slice(0, 200)}"`)
+    const context = parts.join('\n\n')
+
+    const prompt = `Generate a 5-word-or-less title (no punctuation, no quotes) for a Claude Code coding session. The title must describe the core engineering task — what the user was building, fixing, or investigating. Anchor the title on what the session was originally created to do, not on what it ended up doing. Ignore slash commands, skill invocations, and end-of-session housekeeping like running tests, opening PRs, reviewing or "babysitting" PRs, fixing CI, or shipping. Even if those phrases appear in recent messages, the title should describe the underlying feature or fix.
+
+${context}
+
+Reply with only the title.`
 
     const model = settings.titleProvider === 'anthropic'
       ? createAnthropic({ apiKey })(settings.model || 'claude-haiku-4-5-20251001')
