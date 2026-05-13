@@ -254,6 +254,9 @@ function _listClaudeSessions(): ClaudeSession[] {
   return sessions.sort((a, b) => b.lastActivity - a.lastActivity)
 }
 
+type TurnRole = 'user' | 'assistant'
+interface Turn { role: TurnRole; text: string }
+
 export function buildSummaryContext(sessionId: string): string | null {
   const projectsDir = path.join(os.homedir(), '.claude', 'projects')
   let filePath: string | null = null
@@ -267,7 +270,8 @@ export function buildSummaryContext(sessionId: string): string | null {
   } catch { return null }
   if (!filePath) return null
 
-  const messages: string[] = []
+  const turns: Turn[] = []
+  let latestRecap: string | undefined
   try {
     const MAX_READ = 512 * 1024
     const buf = Buffer.alloc(Math.min(fileSize, MAX_READ))
@@ -280,24 +284,38 @@ export function buildSummaryContext(sessionId: string): string | null {
           const obj = JSON.parse(line)
           if (obj.type === 'user') {
             const text = extractText(obj.message?.content)
-            if (text && !text.startsWith('<')) messages.push(text.slice(0, 300))
+            if (text && !text.startsWith('<')) turns.push({ role: 'user', text: text.slice(0, 300) })
+          } else if (obj.type === 'assistant') {
+            const text = extractText(obj.message?.content)
+            // Assistant turns are wordier than user turns — keep more chars
+            // so the gist survives truncation, but skip empty/tool-only turns.
+            if (text) turns.push({ role: 'assistant', text: text.slice(0, 500) })
+          } else if (obj.type === 'summary' && typeof obj.summary === 'string' && obj.summary.trim()) {
+            latestRecap = obj.summary.trim()
           }
         } catch {}
       }
     } finally { fs.closeSync(fd) }
   } catch { return null }
 
-  if (messages.length === 0) return null
+  if (turns.length === 0 && !latestRecap) return null
 
-  // Sample up to 12 messages: first 4, middle 4, last 4 to cover the whole arc
-  let sample: string[]
-  if (messages.length <= 12) {
-    sample = messages
+  // Sample up to 12 turns: first 4, middle 4, last 4 to cover the whole arc.
+  let sample: Turn[]
+  if (turns.length <= 12) {
+    sample = turns
   } else {
-    const mid = Math.floor(messages.length / 2)
-    sample = [...messages.slice(0, 4), ...messages.slice(mid - 2, mid + 2), ...messages.slice(-4)]
+    const mid = Math.floor(turns.length / 2)
+    sample = [...turns.slice(0, 4), ...turns.slice(mid - 2, mid + 2), ...turns.slice(-4)]
   }
-  return sample.map((m, i) => `${i + 1}. ${m}`).join('\n')
+
+  const lines: string[] = []
+  if (latestRecap) lines.push(`Recap: ${latestRecap.slice(0, 800)}`, '')
+  sample.forEach((t, i) => {
+    const tag = t.role === 'user' ? 'User' : 'Claude'
+    lines.push(`${i + 1}. ${tag}: ${t.text}`)
+  })
+  return lines.join('\n')
 }
 
 export function latestSessionIdForCwd(cwd: string): string | null {
