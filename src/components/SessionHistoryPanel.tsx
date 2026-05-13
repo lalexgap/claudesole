@@ -478,7 +478,7 @@ export function SessionHistoryPanel({ onResume, onFork, onClose }: Props) {
             </div>
 
             {selected.source === 'claude' && selected.tokensUsed !== undefined && (
-              <ContextBar tokensUsed={selected.tokensUsed} />
+              <ContextBar tokensUsed={selected.tokensUsed} model={selected.model} />
             )}
 
             {selected.firstPrompt && (

@@ -20,6 +20,7 @@ export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, 
   const [hovered, setHovered] = useState<string | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; id: string } | null>(null)
   const [tokensUsed, setTokensUsed] = useState<number | undefined>(undefined)
+  const [model, setModel] = useState<string | undefined>(undefined)
   const [gitInfo, setGitInfo] = useState<{ branch: string | null; isWorktree: boolean } | null>(null)
   const [summaries, setSummaries] = useState<Record<string, string>>({})
   const loadingSummaries = useRef<Set<string>>(new Set())
@@ -91,10 +92,12 @@ export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, 
   // Load token usage and git info for selected session
   useEffect(() => {
     setTokensUsed(undefined)
+    setModel(undefined)
     setGitInfo(null)
     if (!selectedSession?.cwd) return
     window.electronAPI.getSessionUsage(selectedSession.cwd).then(usage => {
       setTokensUsed(usage?.tokensUsed)
+      setModel(usage?.model)
     })
     window.electronAPI.getGitInfo(selectedSession.cwd).then(setGitInfo)
   }, [selectedSession?.id])
@@ -213,7 +216,7 @@ export function SessionSidebar({ sessions, activeId, onSelect, onClose, onFork, 
               </span>
             </div>
           )}
-          <ContextBar tokensUsed={tokensUsed} compact />
+          <ContextBar tokensUsed={tokensUsed} model={model} compact />
           {(summaries[selectedSession.id] || selectedSession.firstPrompt) && (
             <div className={clsx(
               'text-[11px] leading-[1.5] mt-0.5 line-clamp-4',

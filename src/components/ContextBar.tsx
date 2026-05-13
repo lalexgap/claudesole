@@ -1,17 +1,25 @@
 import clsx from 'clsx'
 
-const MAX_TOKENS = 200_000 // All current Claude models
+// 1M-context variants advertise it in the model ID (e.g. `claude-sonnet-4-5-1m`,
+// `claude-opus-4-7[1m]`). Everything else is still 200K.
+function maxTokensFor(model?: string): number {
+  if (model && /\b1m\b|\[1m\]/i.test(model)) return 1_000_000
+  return 200_000
+}
 
 interface Props {
   tokensUsed?: number
+  model?: string
   compact?: boolean // smaller layout for sidebar
 }
 
-export function ContextBar({ tokensUsed, compact }: Props) {
+export function ContextBar({ tokensUsed, model, compact }: Props) {
   if (tokensUsed === undefined) return null
 
-  const pct = Math.min(100, (tokensUsed / MAX_TOKENS) * 100)
-  const remaining = MAX_TOKENS - tokensUsed
+  const maxTokens = maxTokensFor(model)
+  const pct = Math.min(100, (tokensUsed / maxTokens) * 100)
+  const remaining = Math.max(0, maxTokens - tokensUsed)
+  const maxLabel = maxTokens >= 1_000_000 ? '1M' : '200K'
 
   const barColor = pct > 80 ? 'bg-red-400' : pct > 50 ? 'bg-amber-400' : 'bg-green-400'
 
@@ -28,7 +36,7 @@ export function ContextBar({ tokensUsed, compact }: Props) {
           Context
         </span>
         <span className={clsx('text-[#555]', compact ? 'text-[9px]' : 'text-[10px]')}>
-          {fmt(remaining)} left · {fmt(tokensUsed)} / 200K
+          {fmt(remaining)} left · {fmt(tokensUsed)} / {maxLabel}
         </span>
       </div>
       <div className={clsx(
