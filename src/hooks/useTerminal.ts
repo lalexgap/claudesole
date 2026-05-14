@@ -16,7 +16,7 @@ export interface TerminalHandle {
 // don't get flagged. Captures an optional :line(:col) suffix so e.g.
 // `src/App.tsx:42:7` highlights as one link. The negative lookbehind prevents
 // matches in the middle of identifiers like `someClass.method`.
-const FILE_PATH_RE = /(?<![A-Za-z0-9_/])(?:\.{1,2}\/|~\/|\/)?(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|md|markdown|py|sh|bash|zsh|css|scss|sass|less|html|htm|yml|yaml|toml|rs|go|java|c|h|cpp|hpp|rb|php|sql|env|lock|swift|kt|scala)(?::\d+(?::\d+)?)?(?![A-Za-z0-9])/g
+const FILE_PATH_RE = /(?<![A-Za-z0-9_/])(?:\.{1,2}\/|~\/|\/)?(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|md|markdown|py|sh|bash|zsh|css|scss|sass|less|html|htm|yml|yaml|toml|rs|go|java|c|h|cpp|hpp|rb|rake|gemspec|erb|php|sql|env|lock|swift|kt|scala)(?::\d+(?::\d+)?)?(?![A-Za-z0-9])/g
 
 export function useTerminal(
   sessionId: string,

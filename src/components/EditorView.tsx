@@ -13,6 +13,7 @@ import { python } from '@codemirror/lang-python'
 import { yaml } from '@codemirror/lang-yaml'
 import { StreamLanguage } from '@codemirror/language'
 import { shell } from '@codemirror/legacy-modes/mode/shell'
+import { ruby } from '@codemirror/legacy-modes/mode/ruby'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { useSessionsStore } from '../store/sessions'
 
@@ -33,6 +34,12 @@ interface Props {
 }
 
 function languageFor(filePath: string) {
+  const basename = filePath.split('/').pop() ?? ''
+  // Ruby ships extensionless filenames more than most languages — match by
+  // basename before falling through to extension dispatch.
+  if (/^(Gemfile|Rakefile|Guardfile|Capfile|Berksfile|Vagrantfile|Podfile|Brewfile|Thorfile|config\.ru)$/i.test(basename)) {
+    return StreamLanguage.define(ruby)
+  }
   const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
   switch (ext) {
     case 'ts':
@@ -64,6 +71,12 @@ function languageFor(filePath: string) {
     case 'bash':
     case 'zsh':
       return StreamLanguage.define(shell)
+    case 'rb':
+    case 'rake':
+    case 'gemspec':
+    case 'ru':
+    case 'erb':
+      return StreamLanguage.define(ruby)
     default:
       return []
   }
