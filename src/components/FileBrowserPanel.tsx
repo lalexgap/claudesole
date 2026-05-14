@@ -1,5 +1,9 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } from 'react'
 import clsx from 'clsx'
+
+// Click-to-open is threaded through a context so DirNode/FileRow/SearchResultRow
+// don't all need a new prop. Falsy = the panel was mounted without an opener.
+const OpenFileContext = createContext<((path: string) => void) | null>(null)
 
 const MIN_WIDTH = 180
 const MAX_WIDTH = 480
@@ -15,6 +19,7 @@ interface Entry {
 interface Props {
   rootPath: string | null
   onClose: () => void
+  onOpenFile?: (path: string) => void
 }
 
 // POSIX shell single-quote escape — wraps in single quotes if any non-trivial char.
@@ -25,7 +30,7 @@ export function shellQuotePath(p: string): string {
 
 interface WalkEntry { name: string; path: string; relPath: string }
 
-export function FileBrowserPanel({ rootPath, onClose }: Props) {
+export function FileBrowserPanel({ rootPath, onClose, onOpenFile }: Props) {
   const [width, setWidth] = useState(260)
   const isDragging = useRef(false)
   const dragStartX = useRef(0)
@@ -80,6 +85,7 @@ export function FileBrowserPanel({ rootPath, onClose }: Props) {
   }, [width])
 
   return (
+    <OpenFileContext.Provider value={onOpenFile ?? null}>
     <div className="shrink-0 bg-app-850 border-r border-app-650 flex flex-col overflow-hidden relative" style={{ width }}>
       <div
         onMouseDown={onDragStart}
@@ -126,9 +132,10 @@ export function FileBrowserPanel({ rootPath, onClose }: Props) {
       </div>
 
       <div className="shrink-0 border-t border-app-700 px-3 py-1.5 text-[#555] text-[10px] leading-tight">
-        Drag a file into a terminal to insert its path.
+        Click a file to open it. Drag into a terminal to insert its path.
       </div>
     </div>
+    </OpenFileContext.Provider>
   )
 }
 
@@ -186,7 +193,8 @@ function DirNode({ path, depth, initiallyOpen, showHidden, label }: NodeProps) {
 }
 
 function FileRow({ entry, depth }: { entry: Entry; depth: number }) {
-  return <Row depth={depth} isDir={false} name={entry.name} path={entry.path} />
+  const openFile = useContext(OpenFileContext)
+  return <Row depth={depth} isDir={false} name={entry.name} path={entry.path} onClick={openFile ? () => openFile(entry.path) : undefined} />
 }
 
 function Row({ depth, isDir, open, name, path, onClick }: {
@@ -271,6 +279,7 @@ function SearchResults({ query, walk, loading, error }: {
 
 function SearchResultRow({ match }: { match: Match }) {
   const { entry, indices } = match
+  const openFile = useContext(OpenFileContext)
   const handleDragStart = (e: React.DragEvent) => {
     const quoted = shellQuotePath(entry.path) + ' '
     e.dataTransfer.setData('text/plain', quoted)
@@ -288,7 +297,11 @@ function SearchResultRow({ match }: { match: Match }) {
     <div
       draggable
       onDragStart={handleDragStart}
-      className="flex flex-col px-2 py-[3px] cursor-grab hover:bg-white/[0.04] select-none"
+      onClick={openFile ? () => openFile(entry.path) : undefined}
+      className={clsx(
+        'flex flex-col px-2 py-[3px] hover:bg-white/[0.04] select-none',
+        openFile ? 'cursor-pointer' : 'cursor-grab'
+      )}
       title={entry.path}
     >
       <div className="flex items-center gap-1.5 text-[12px] text-[#ccc]">
@@ -330,7 +343,7 @@ function renderHighlighted(str: string, indices: number[], offset: number) {
 //   +4  match at path boundary (start or after / . - _ space)
 //   +8  match on a basename character
 //   −0.05 per unmatched char in the path (shorter paths preferred)
-function fuzzyScore(query: string, target: string): { score: number; indices: number[] } | null {
+export function fuzzyScore(query: string, target: string): { score: number; indices: number[] } | null {
   const q = query.toLowerCase()
   const t = target.toLowerCase()
   const slash = target.lastIndexOf('/')

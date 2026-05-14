@@ -25,6 +25,20 @@ export interface ConfirmRequest {
   tone: 'default' | 'danger'
 }
 
+export type ChoiceResult = 'primary' | 'alt' | 'cancel'
+
+export interface ChoiceRequest {
+  id: string
+  title: string
+  message?: string
+  primaryLabel: string
+  altLabel: string
+  cancelLabel: string
+  // The button that should look primary/highlighted. `alt` is useful when the
+  // safe action isn't the most likely one (e.g. "Discard" rather than "Save").
+  defaultButton: 'primary' | 'alt' | 'cancel'
+}
+
 interface PushToastInput {
   tone?: ToastTone
   message: string
@@ -40,20 +54,34 @@ interface RequestConfirmInput {
   tone?: 'default' | 'danger'
 }
 
+interface RequestChoiceInput {
+  title: string
+  message?: string
+  primaryLabel: string
+  altLabel: string
+  cancelLabel?: string
+  defaultButton?: 'primary' | 'alt' | 'cancel'
+}
+
 interface UiState {
   toasts: Toast[]
   confirmRequest: ConfirmRequest | null
+  choiceRequest: ChoiceRequest | null
   pushToast: (input: PushToastInput) => string
   dismissToast: (id: string) => void
   requestConfirm: (input: RequestConfirmInput) => Promise<boolean>
   resolveConfirm: (ok: boolean) => void
+  requestChoice: (input: RequestChoiceInput) => Promise<ChoiceResult>
+  resolveChoice: (result: ChoiceResult) => void
 }
 
 let pendingResolver: ((ok: boolean) => void) | null = null
+let pendingChoiceResolver: ((result: ChoiceResult) => void) | null = null
 
 export const useUiStore = create<UiState>((set, get) => ({
   toasts: [],
   confirmRequest: null,
+  choiceRequest: null,
 
   pushToast: ({ tone = 'info', message, action, durationMs }) => {
     const id = nanoid()
@@ -96,6 +124,35 @@ export const useUiStore = create<UiState>((set, get) => ({
     }
     set({ confirmRequest: null })
   },
+
+  requestChoice: (input) => {
+    if (pendingChoiceResolver) {
+      pendingChoiceResolver('cancel')
+      pendingChoiceResolver = null
+    }
+    return new Promise<ChoiceResult>((resolve) => {
+      pendingChoiceResolver = resolve
+      set({
+        choiceRequest: {
+          id: nanoid(),
+          title: input.title,
+          message: input.message,
+          primaryLabel: input.primaryLabel,
+          altLabel: input.altLabel,
+          cancelLabel: input.cancelLabel ?? 'Cancel',
+          defaultButton: input.defaultButton ?? 'primary',
+        },
+      })
+    })
+  },
+
+  resolveChoice: (result) => {
+    if (pendingChoiceResolver) {
+      pendingChoiceResolver(result)
+      pendingChoiceResolver = null
+    }
+    set({ choiceRequest: null })
+  },
 }))
 
 export const toast = {
@@ -111,3 +168,6 @@ export const toast = {
 
 export const confirm = (input: RequestConfirmInput) =>
   useUiStore.getState().requestConfirm(input)
+
+export const choose = (input: RequestChoiceInput) =>
+  useUiStore.getState().requestChoice(input)

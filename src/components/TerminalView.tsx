@@ -6,9 +6,11 @@ interface TerminalViewProps {
   isActive: boolean
   isShell?: boolean
   onCmdK?: () => void
+  cwd?: string
+  onOpenPath?: (filePath: string) => void
 }
 
-export function TerminalView({ sessionId, isActive, isShell, onCmdK }: TerminalViewProps) {
+export function TerminalView({ sessionId, isActive, isShell, onCmdK, cwd, onOpenPath }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const handleRef = useRef<TerminalHandle | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -25,7 +27,7 @@ export function TerminalView({ sessionId, isActive, isShell, onCmdK }: TerminalV
     setSearchQuery('')
   }, [])
 
-  useTerminal(sessionId, containerRef, openSearch, onCmdK ?? (() => {}), handleRef, isShell, isActive)
+  useTerminal(sessionId, containerRef, openSearch, onCmdK ?? (() => {}), handleRef, isShell, isActive, cwd, onOpenPath)
 
   // Scroll to bottom whenever this terminal becomes the active one
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Terminal } from '@xterm/xterm'
+import { Terminal, IBufferLine } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -12,6 +12,12 @@ export interface TerminalHandle {
   scrollToBottom: () => void
 }
 
+// File path detection. Anchored on a file-extension list so URLs and bare words
+// don't get flagged. Captures an optional :line(:col) suffix so e.g.
+// `src/App.tsx:42:7` highlights as one link. The negative lookbehind prevents
+// matches in the middle of identifiers like `someClass.method`.
+const FILE_PATH_RE = /(?<![A-Za-z0-9_/])(?:\.{1,2}\/|~\/|\/)?(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|md|markdown|py|sh|bash|zsh|css|scss|sass|less|html|htm|yml|yaml|toml|rs|go|java|c|h|cpp|hpp|rb|rake|gemspec|erb|php|sql|env|lock|swift|kt|scala)(?::\d+(?::\d+)?)?(?![A-Za-z0-9])/g
+
 export function useTerminal(
   sessionId: string,
   containerRef: React.RefObject<HTMLDivElement>,
@@ -20,6 +26,8 @@ export function useTerminal(
   handleRef: React.MutableRefObject<TerminalHandle | null>,
   isShell = false,
   isActive = false,
+  cwd?: string,
+  onOpenPath?: (filePath: string) => void,
 ) {
   const markRunning = useSessionsStore((s) => s.markRunning)
   const markWaiting = useSessionsStore((s) => s.markWaiting)
@@ -39,12 +47,16 @@ export function useTerminal(
   const markWaitingRef = useRef(markWaiting)
   const isShellRef = useRef(isShell)
   const isActiveRef = useRef(isActive)
+  const cwdRef = useRef(cwd)
+  const onOpenPathRef = useRef(onOpenPath)
   useEffect(() => { onCmdFRef.current = onCmdF })
   useEffect(() => { onCmdKRef.current = onCmdK })
   useEffect(() => { markRunningRef.current = markRunning })
   useEffect(() => { markWaitingRef.current = markWaiting })
   useEffect(() => { isShellRef.current = isShell })
   useEffect(() => { isActiveRef.current = isActive })
+  useEffect(() => { cwdRef.current = cwd })
+  useEffect(() => { onOpenPathRef.current = onOpenPath })
 
   useEffect(() => {
     const container = containerRef.current
@@ -86,11 +98,75 @@ export function useTerminal(
     term.loadAddon(webLinksAddon)
     term.open(container)
 
+    // File-path link provider. Matches likely file paths in terminal output and
+    // opens them in an editor tab on Cmd+click. Validates against the filesystem
+    // (relative paths are resolved against the session cwd) before underlining.
+    const linkProviderDisposable = term.registerLinkProvider({
+      provideLinks(bufferLineNumber, callback) {
+        const buf = term.buffer.active
+        const line: IBufferLine | undefined = buf.getLine(bufferLineNumber - 1)
+        if (!line) { callback(undefined); return }
+        const text = line.translateToString(true)
+        FILE_PATH_RE.lastIndex = 0
+        const candidates: Array<{ match: RegExpExecArray; resolved: string }> = []
+        const cwdNow = cwdRef.current
+        if (!cwdNow) { callback(undefined); return }
+        let m: RegExpExecArray | null
+        while ((m = FILE_PATH_RE.exec(text)) !== null) {
+          const raw = m[0]
+          const pathPart = raw.replace(/:\d+(?::\d+)?$/, '')
+          let absolute: string
+          if (pathPart.startsWith('/')) absolute = pathPart
+          else if (pathPart.startsWith('~/')) absolute = pathPart // leave as-is, fs.exists will fail
+          else absolute = cwdNow.replace(/\/$/, '') + '/' + pathPart.replace(/^\.\//, '')
+          candidates.push({ match: m, resolved: absolute })
+        }
+        if (candidates.length === 0) { callback(undefined); return }
+        // Validate all candidates in parallel; only emit links for files that exist.
+        Promise.all(candidates.map(c =>
+          window.electronAPI.fileExists(c.resolved).then(r => r.isFile ? c : null).catch(() => null)
+        )).then(results => {
+          const links = results.flatMap((c, i): import('@xterm/xterm').ILink[] => {
+            if (!c) return []
+            return [{
+              range: {
+                start: { x: candidates[i].match.index + 1, y: bufferLineNumber },
+                end:   { x: candidates[i].match.index + candidates[i].match[0].length, y: bufferLineNumber },
+              },
+              text: candidates[i].match[0],
+              activate: (event) => {
+                if (!event.metaKey) return
+                onOpenPathRef.current?.(c.resolved)
+              },
+              hover: () => {},
+              leave: () => {},
+            }]
+          })
+          callback(links)
+        })
+      },
+    })
+
     const onMouseDown = (e: MouseEvent) => {
-      if (e.metaKey && hoveredUrl) {
-        window.electronAPI.openExternal(hoveredUrl)
-        e.preventDefault()
+      if (!e.metaKey || !hoveredUrl) return
+      // Claude Code emits file paths as OSC 8 hyperlinks with file:// URIs.
+      // Route those to the editor; everything else (http/https) still opens
+      // in the user's default external app.
+      if (hoveredUrl.startsWith('file://') && onOpenPathRef.current) {
+        try {
+          const u = new URL(hoveredUrl)
+          // u.pathname is already decoded by URL; strip an optional :line(:col)
+          // suffix so e.g. file:///abs/path.ts:42 still resolves to the file.
+          const filePath = decodeURIComponent(u.pathname).replace(/:\d+(?::\d+)?$/, '')
+          onOpenPathRef.current(filePath)
+          e.preventDefault()
+          return
+        } catch {
+          // fall through to external open if parsing fails
+        }
       }
+      window.electronAPI.openExternal(hoveredUrl)
+      e.preventDefault()
     }
     container.addEventListener('mousedown', onMouseDown)
 
@@ -245,6 +321,7 @@ export function useTerminal(
       resizeObserver.disconnect()
       container.removeEventListener('mousedown', onMouseDown)
       document.removeEventListener('copy', onCopy)
+      linkProviderDisposable.dispose()
       term.dispose()
     }
   }, [sessionId])

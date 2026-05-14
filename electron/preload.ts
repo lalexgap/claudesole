@@ -121,4 +121,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   walkDirectory: (rootPath: string, includeHidden?: boolean, maxEntries?: number): Promise<{ entries: Array<{ name: string; path: string; relPath: string }>; truncated: boolean; cap: number }> =>
     ipcRenderer.invoke('fs:walkDir', { rootPath, includeHidden, maxEntries }),
 
+  readFile: (filePath: string): Promise<{ content: string; mtimeMs: number; size: number }> =>
+    ipcRenderer.invoke('fs:readFile', filePath),
+
+  writeFile: (filePath: string, content: string): Promise<{ mtimeMs: number; size: number }> =>
+    ipcRenderer.invoke('fs:writeFile', { filePath, content }),
+
+  fileExists: (filePath: string): Promise<{ exists: boolean; isFile: boolean; isDir: boolean; mtimeMs: number }> =>
+    ipcRenderer.invoke('fs:exists', filePath),
+
 })

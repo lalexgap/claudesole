@@ -1,27 +1,31 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { useSessionsStore } from './store/sessions'
+import { useSessionsStore, hydrateEditorSessions, armEditorPersistence } from './store/sessions'
 import { TabBar } from './components/TabBar'
 import { TerminalView } from './components/TerminalView'
+import { Editor, saveEditor } from './components/EditorView'
 import { NewSessionModal, SessionOpts } from './components/NewSessionModal'
 import { SessionSidebar } from './components/SessionSidebar'
 import { FileBrowserPanel } from './components/FileBrowserPanel'
 import { SessionHistoryPanel } from './components/SessionHistoryPanel'
 import { PaneNode, splitLeaf, removeFromTree, getLeafIds, computeLayout, updateRatioAtPath, SplitDividers } from './components/SplitView'
 import { QuickSwitcher } from './components/QuickSwitcher'
+import { QuickOpenModal } from './components/QuickOpenModal'
 import { WorktreePanel } from './components/WorktreePanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ToastStack } from './components/ToastStack'
 import { ConfirmDialog } from './components/ConfirmDialog'
-import { toast, confirm } from './store/ui'
+import { ChoiceDialog } from './components/ChoiceDialog'
+import { toast, confirm, choose } from './store/ui'
 import { ClaudeSession, CodexSession } from './types/ipc'
 import type { HistorySession } from './components/SessionHistoryPanel'
 
 export default function App() {
-  const { sessions, activeId, addSession, removeSession, setActive, renameSession, togglePin, setAiTitle, clearAiTitle, setBranch } = useSessionsStore()
+  const { sessions, activeId, addSession, addEditorSession, removeSession, setActive, renameSession, togglePin, setAiTitle, clearAiTitle, setBranch } = useSessionsStore()
   const [showModal, setShowModal] = useState(false)
   const [showSidebar, setShowSidebar] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [showSwitcher, setShowSwitcher] = useState(false)
+  const [showQuickOpen, setShowQuickOpen] = useState(false)
   const [showWorktrees, setShowWorktrees] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showFiles, setShowFiles] = useState(false)
@@ -74,9 +78,33 @@ export default function App() {
   const toggleSettings = () => setShowSettings(v => !v)
   const toggleFiles = () => setShowFiles(v => !v)
 
-  // Auto-open modal on launch
+  // Hydrate persisted editor tabs first (silently drop ones whose files are gone),
+  // then auto-open the modal only if nothing was restored.
   useEffect(() => {
-    if (sessions.length === 0) setShowModal(true)
+    let cancelled = false
+    const { sessions: persisted, activeId } = hydrateEditorSessions()
+    if (persisted.length === 0) {
+      armEditorPersistence()
+      if (sessions.length === 0) setShowModal(true)
+      return
+    }
+    Promise.all(persisted.map(s =>
+      window.electronAPI.fileExists(s.filePath!)
+        .then(r => (r.exists && r.isFile) ? s : null)
+        .catch(() => null)
+    )).then(results => {
+      if (cancelled) return
+      const valid = results.filter((s): s is typeof persisted[number] => s !== null)
+      if (valid.length > 0) {
+        useSessionsStore.getState().hydrateEditorTabs(valid, activeId)
+      }
+      // Arm AFTER injecting hydrated tabs so we don't immediately overwrite
+      // localStorage with an empty state during the initial render race.
+      armEditorPersistence()
+      if (valid.length === 0 && sessions.length === 0) setShowModal(true)
+    })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Dock badge — only Claude/Codex sessions (shell idle is not actionable)
@@ -172,9 +200,32 @@ export default function App() {
     if (pendingSplit && sessionId) handleSplitWithNew(sessionId)
   }
 
+  const openFileInEditor = useCallback((filePath: string, cwd: string) => {
+    // If the file is already open in an editor tab, just focus it.
+    const existing = sessions.find(s => s.type === 'editor' && s.filePath === filePath)
+    if (existing) {
+      setActive(existing.id)
+      return existing.id
+    }
+    return addEditorSession(filePath, cwd)
+  }, [sessions, setActive, addEditorSession])
+
   const handleCloseTab = useCallback(async (id: string) => {
     const session = sessions.find(s => s.id === id)
-    if (session?.status === 'running') {
+    if (session?.type === 'editor' && session.isDirty) {
+      const choice = await choose({
+        title: 'Save changes?',
+        message: `"${session.label}" has unsaved changes.`,
+        primaryLabel: 'Save',
+        altLabel: "Don't save",
+        cancelLabel: 'Cancel',
+        defaultButton: 'primary',
+      })
+      if (choice === 'cancel') return
+      if (choice === 'primary') {
+        try { await saveEditor(id) } catch { return }
+      }
+    } else if (session?.type !== 'editor' && session?.status === 'running') {
       const ok = await confirm({
         title: 'Close session?',
         message: `"${session.label}" may still be running.`,
@@ -402,6 +453,35 @@ export default function App() {
     return window.electronAPI.onShortcutNewSession(openModal)
   }, [])
 
+  // Native files dropped from Finder open in editor tabs. Electron 29 still
+  // exposes `File.path` on the dropped File, so no IPC roundtrip needed.
+  useEffect(() => {
+    const onDragOver = (e: DragEvent) => {
+      if (!e.dataTransfer?.types?.includes('Files')) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'copy'
+    }
+    const onDrop = (e: DragEvent) => {
+      const files = e.dataTransfer?.files
+      if (!files || files.length === 0) return
+      e.preventDefault()
+      const id = activeFocusedId ?? activeId
+      const cwd = sessions.find(s => s.id === id)?.cwd
+      if (!cwd) return
+      for (const file of Array.from(files)) {
+        const filePath = (file as File & { path?: string }).path
+        if (!filePath) continue
+        openFileInEditor(filePath, cwd)
+      }
+    }
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('drop', onDrop)
+    return () => {
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('drop', onDrop)
+    }
+  }, [sessions, activeId, activeFocusedId, openFileInEditor])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.metaKey) return
@@ -409,6 +489,7 @@ export default function App() {
       if (e.key === 'b') { e.preventDefault(); toggleSidebar(); return }
       if (e.key === 'h') { e.preventDefault(); toggleHistory(); return }
       if (e.key === 'k') { e.preventDefault(); setShowSwitcher(v => !v); return }
+      if (e.key === 'p') { e.preventDefault(); setShowQuickOpen(v => !v); return }
       if (e.key === 'G' && e.shiftKey) { e.preventDefault(); toggleWorktrees(); return }
       if (e.key === ',') { e.preventDefault(); toggleSettings(); return }
       if (e.key === 'e') { e.preventDefault(); toggleFiles(); return }
@@ -562,15 +643,17 @@ export default function App() {
           />
         )}
 
-        {showFiles && (
-          <FileBrowserPanel
-            rootPath={(() => {
-              const id = activeFocusedId ?? activeId
-              return sessions.find(s => s.id === id)?.cwd ?? null
-            })()}
-            onClose={() => setShowFiles(false)}
-          />
-        )}
+        {showFiles && (() => {
+          const id = activeFocusedId ?? activeId
+          const cwd = sessions.find(s => s.id === id)?.cwd ?? null
+          return (
+            <FileBrowserPanel
+              rootPath={cwd}
+              onClose={() => setShowFiles(false)}
+              onOpenFile={cwd ? (path) => { openFileInEditor(path, cwd) } : undefined}
+            />
+          )
+        })()}
 
         <div ref={contentRef} className="relative flex-1 overflow-hidden">
           {sessions.length === 0 && !showHistory && (
@@ -617,12 +700,22 @@ export default function App() {
                 onClick={splitRect ? () => handlePaneFocus(session.id) : undefined}
                 onContextMenu={(e) => handlePaneContextMenu(e, session.id)}
               >
-                <TerminalView
-                  sessionId={session.id}
-                  isActive={isVisible && (isNonSplitActive || isFocused)}
-                  isShell={session.type === 'shell'}
-                  onCmdK={() => setShowSwitcher(true)}
-                />
+                {session.type === 'editor' && session.filePath ? (
+                  <Editor
+                    sessionId={session.id}
+                    filePath={session.filePath}
+                    isActive={isVisible && (isNonSplitActive || isFocused)}
+                  />
+                ) : (
+                  <TerminalView
+                    sessionId={session.id}
+                    isActive={isVisible && (isNonSplitActive || isFocused)}
+                    isShell={session.type === 'shell'}
+                    onCmdK={() => setShowSwitcher(true)}
+                    cwd={session.cwd}
+                    onOpenPath={(filePath) => openFileInEditor(filePath, session.cwd)}
+                  />
+                )}
                 {splitRect && (
                   <button
                     onClick={(e) => { e.stopPropagation(); handleClosePane(session.id) }}
@@ -691,9 +784,22 @@ export default function App() {
           onClose={() => setShowSwitcher(false)}
         />
       )}
+
+      {showQuickOpen && (() => {
+        const id = activeFocusedId ?? activeId
+        const cwd = sessions.find(s => s.id === id)?.cwd ?? null
+        return (
+          <QuickOpenModal
+            rootPath={cwd}
+            onPick={(filePath) => { if (cwd) openFileInEditor(filePath, cwd) }}
+            onClose={() => setShowQuickOpen(false)}
+          />
+        )
+      })()}
     </div>
     <ToastStack />
     <ConfirmDialog />
+    <ChoiceDialog />
     </>
   )
 }
