@@ -152,7 +152,7 @@ export async function generateTitle(
     if (useLatest && trimmedLatest) parts.push(`The latest message was: "${trimmedLatest.slice(0, 200)}"`)
     const context = parts.join('\n\n')
 
-    const prompt = `Generate a 5-word-or-less title (no punctuation, no quotes) for a Claude Code coding session. The title must describe the core engineering task — what the user was building, fixing, or investigating. Anchor the title on what the session was originally created to do, not on what it ended up doing. Ignore slash commands, skill invocations, and end-of-session housekeeping like running tests, opening PRs, reviewing or "babysitting" PRs, fixing CI, or shipping. Even if those phrases appear in recent messages, the title should describe the underlying feature or fix.
+    const prompt = `Generate a very short title (2–3 words, max 24 characters, no punctuation, no quotes, no trailing period) for a Claude Code coding session. The title must describe the core engineering task — what the user was building, fixing, or investigating. Prefer "<verb> <noun>" or just "<noun phrase>". Drop filler like "the", "a", "implementation", "for", "with". Anchor the title on what the session was originally created to do, not on what it ended up doing. Ignore slash commands, skill invocations, and end-of-session housekeeping like running tests, opening PRs, reviewing or "babysitting" PRs, fixing CI, or shipping. Even if those phrases appear in recent messages, the title should describe the underlying feature or fix.
 
 ${context}
 
@@ -162,8 +162,10 @@ Reply with only the title.`
       ? createAnthropic({ apiKey })(settings.model || 'claude-haiku-4-5-20251001')
       : createOpenAI({ apiKey, baseURL: settings.baseUrl, compatibility: 'compatible' }).chat(settings.model)
 
-    const { text } = await generateText({ model, prompt, maxTokens: 20 })
-    const raw = text.trim().replace(/^["']|["']$/g, '').slice(0, 60)
+    const { text } = await generateText({ model, prompt, maxTokens: 16 })
+    // Hard cap at 28 chars so the tab label never wraps even at the smallest
+    // tab width (~88px). Trim trailing punctuation the model sometimes adds.
+    const raw = text.trim().replace(/^["']|["']$/g, '').replace(/[.,;:!?]+$/, '').slice(0, 28).trim()
     if (!raw) return null
 
     loadCache()
