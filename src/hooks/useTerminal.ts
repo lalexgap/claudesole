@@ -148,10 +148,25 @@ export function useTerminal(
     })
 
     const onMouseDown = (e: MouseEvent) => {
-      if (e.metaKey && hoveredUrl) {
-        window.electronAPI.openExternal(hoveredUrl)
-        e.preventDefault()
+      if (!e.metaKey || !hoveredUrl) return
+      // Claude Code emits file paths as OSC 8 hyperlinks with file:// URIs.
+      // Route those to the editor; everything else (http/https) still opens
+      // in the user's default external app.
+      if (hoveredUrl.startsWith('file://') && onOpenPathRef.current) {
+        try {
+          const u = new URL(hoveredUrl)
+          // u.pathname is already decoded by URL; strip an optional :line(:col)
+          // suffix so e.g. file:///abs/path.ts:42 still resolves to the file.
+          const filePath = decodeURIComponent(u.pathname).replace(/:\d+(?::\d+)?$/, '')
+          onOpenPathRef.current(filePath)
+          e.preventDefault()
+          return
+        } catch {
+          // fall through to external open if parsing fails
+        }
       }
+      window.electronAPI.openExternal(hoveredUrl)
+      e.preventDefault()
     }
     container.addEventListener('mousedown', onMouseDown)
 
