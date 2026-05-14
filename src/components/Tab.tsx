@@ -103,7 +103,11 @@ export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename,
         onDragOver={e => divRef.current && onDragOver?.(e, divRef.current)}
         onDragEnd={() => { setDraggable(false); onDragEnd?.() }}
         className={clsx(
-          'flex items-center gap-1 py-1 pl-2 pr-2.5 rounded-md cursor-pointer border select-none max-w-[160px] shrink-0 transition-[background,border-color] duration-300',
+          // Tabs are roomy by default (max 240px) and only shrink — down to a
+          // min where the title becomes unreadable — when many of them are
+          // competing for horizontal space. TabBar still falls back to
+          // overflow-x-auto past that, so nothing gets fully clipped.
+          'flex items-center gap-1 py-1 pl-2 pr-2.5 rounded-md cursor-pointer border select-none max-w-[240px] min-w-[88px] basis-[240px] shrink transition-[background,border-color] duration-300',
           isActive ? 'text-white' : 'text-[#aaa]',
           bgCls,
           borderCls,
@@ -141,9 +145,13 @@ export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename,
         ) : (
           <span className="overflow-hidden text-ellipsis whitespace-nowrap flex-1 text-[13px]">
             {splitLabel ?? (() => {
+              // Priority: explicit user rename > generated AI title > branch (early
+              // in a session, before a title has been generated) > folder name.
               const defaultLabel = session.cwd.split('/').pop() || session.cwd
               const userRenamed = session.label !== defaultLabel
-              return userRenamed ? session.label : (session.branch || session.label)
+              if (userRenamed) return session.label
+              if (session.aiTitle) return session.aiTitle
+              return session.branch || session.label
             })()}
           </span>
         )}
