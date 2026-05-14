@@ -84,6 +84,9 @@ export interface ElectronAPI {
   fullTextSearchSessions: (query: string, limit?: number) => Promise<SessionSearchHit[]>
   listDirectory: (dirPath: string) => Promise<Array<{ name: string; path: string; isDir: boolean; isHidden: boolean }>>
   walkDirectory: (rootPath: string, includeHidden?: boolean, maxEntries?: number) => Promise<{ entries: Array<{ name: string; path: string; relPath: string }>; truncated: boolean; cap: number }>
+  readFile: (filePath: string) => Promise<{ content: string; mtimeMs: number; size: number }>
+  writeFile: (filePath: string, content: string) => Promise<{ mtimeMs: number; size: number }>
+  fileExists: (filePath: string) => Promise<{ exists: boolean; isFile: boolean; isDir: boolean; mtimeMs: number }>
 }
 
 declare global {

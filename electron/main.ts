@@ -50,6 +50,11 @@ function validateDir(p: unknown): string {
   return resolved
 }
 
+function validateAbsolutePath(p: unknown): string {
+  if (typeof p !== 'string' || !path.isAbsolute(p)) throw new Error('Invalid path')
+  return path.resolve(p)
+}
+
 function isSafeUrl(url: unknown): url is string {
   if (typeof url !== 'string') return false
   try {
@@ -265,6 +270,42 @@ function setupIpcHandlers() {
     }
     walk(resolved, '')
     return { entries: out, truncated, cap }
+  })
+
+  // 10MB cap — protects against accidentally opening a giant log/binary file.
+  // Files larger than this fail loudly in the renderer.
+  const MAX_READ_BYTES = 10 * 1024 * 1024
+
+  ipcMain.handle('fs:readFile', (_event, filePath: unknown) => {
+    const resolved = validateAbsolutePath(filePath)
+    const st = fs.statSync(resolved)
+    if (!st.isFile()) throw new Error('Not a file')
+    if (st.size > MAX_READ_BYTES) throw new Error(`File too large (${st.size} bytes; max ${MAX_READ_BYTES})`)
+    const buf = fs.readFileSync(resolved)
+    // Reject obviously binary content (null byte in first 8KB).
+    const probeEnd = Math.min(buf.length, 8192)
+    for (let i = 0; i < probeEnd; i++) if (buf[i] === 0) throw new Error('Binary file')
+    return { content: buf.toString('utf-8'), mtimeMs: st.mtimeMs, size: st.size }
+  })
+
+  ipcMain.handle('fs:writeFile', (_event, args: unknown) => {
+    if (!args || typeof args !== 'object') throw new Error('Invalid args')
+    const { filePath, content } = args as { filePath?: unknown; content?: unknown }
+    const resolved = validateAbsolutePath(filePath)
+    if (typeof content !== 'string') throw new Error('Content must be a string')
+    fs.writeFileSync(resolved, content, 'utf-8')
+    const st = fs.statSync(resolved)
+    return { mtimeMs: st.mtimeMs, size: st.size }
+  })
+
+  ipcMain.handle('fs:exists', (_event, filePath: unknown) => {
+    try {
+      const resolved = validateAbsolutePath(filePath)
+      const st = fs.statSync(resolved)
+      return { exists: true, isFile: st.isFile(), isDir: st.isDirectory(), mtimeMs: st.mtimeMs }
+    } catch {
+      return { exists: false, isFile: false, isDir: false, mtimeMs: 0 }
+    }
   })
 
   ipcMain.handle('fs:listDir', (_event, dirPath: string) => {

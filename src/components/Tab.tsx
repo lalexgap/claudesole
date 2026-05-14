@@ -29,7 +29,9 @@ export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename,
 
   const isShell = session.type === 'shell'
   const isCodex = session.type === 'codex'
+  const isEditor = session.type === 'editor'
   const isRunning = session.status === 'running'
+  const isDirty = !!session.isDirty
 
   const startEdit = () => {
     setEditValue(session.label)
@@ -49,34 +51,38 @@ export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename,
   }
 
   const bgCls = clsx({
+    // Editor (independent of running/waiting)
+    'bg-amber-400/[0.18]': isEditor && isActive,
+    'bg-amber-400/[0.10]': isEditor && !isActive,
     // Shell running
-    'bg-blue-400/[0.18]': isShell && isRunning && isActive,
-    'bg-blue-400/[0.13]': isShell && isRunning && !isActive,
+    'bg-blue-400/[0.18]': !isEditor && isShell && isRunning && isActive,
+    'bg-blue-400/[0.13]': !isEditor && isShell && isRunning && !isActive,
     // Shell idle
-    'bg-slate-500/[0.18]': isShell && !isRunning && isActive,
-    'bg-slate-500/[0.10]': isShell && !isRunning && !isActive,
+    'bg-slate-500/[0.18]': !isEditor && isShell && !isRunning && isActive,
+    'bg-slate-500/[0.10]': !isEditor && isShell && !isRunning && !isActive,
     // Codex running
-    'bg-purple-400/[0.18]': isCodex && isRunning && isActive,
-    'bg-purple-400/[0.13]': isCodex && isRunning && !isActive,
+    'bg-purple-400/[0.18]': !isEditor && isCodex && isRunning && isActive,
+    'bg-purple-400/[0.13]': !isEditor && isCodex && isRunning && !isActive,
     // Codex waiting
-    'bg-orange-400/[0.18]': isCodex && !isRunning && isActive,
-    'bg-orange-400/[0.13]': isCodex && !isRunning && !isActive,
+    'bg-orange-400/[0.18]': !isEditor && isCodex && !isRunning && isActive,
+    'bg-orange-400/[0.13]': !isEditor && isCodex && !isRunning && !isActive,
     // Claude running
-    'bg-green-400/[0.18]': !isShell && !isCodex && isRunning && isActive,
-    'bg-green-400/[0.13]': !isShell && !isCodex && isRunning && !isActive,
+    'bg-green-400/[0.18]': !isEditor && !isShell && !isCodex && isRunning && isActive,
+    'bg-green-400/[0.13]': !isEditor && !isShell && !isCodex && isRunning && !isActive,
     // Claude waiting
-    'bg-red-400/[0.18]': !isShell && !isCodex && !isRunning && isActive,
-    'bg-red-400/[0.13]': !isShell && !isCodex && !isRunning && !isActive,
+    'bg-red-400/[0.18]': !isEditor && !isShell && !isCodex && !isRunning && isActive,
+    'bg-red-400/[0.13]': !isEditor && !isShell && !isCodex && !isRunning && !isActive,
   })
 
   const borderCls = isActive
     ? clsx({
-        'border-blue-400/[0.35]': isShell && isRunning,
-        'border-slate-500/[0.35]': isShell && !isRunning,
-        'border-purple-400/[0.35]': isCodex && isRunning,
-        'border-orange-400/[0.35]': isCodex && !isRunning,
-        'border-green-400/[0.35]': !isShell && !isCodex && isRunning,
-        'border-red-400/[0.35]': !isShell && !isCodex && !isRunning,
+        'border-amber-400/[0.35]': isEditor,
+        'border-blue-400/[0.35]': !isEditor && isShell && isRunning,
+        'border-slate-500/[0.35]': !isEditor && isShell && !isRunning,
+        'border-purple-400/[0.35]': !isEditor && isCodex && isRunning,
+        'border-orange-400/[0.35]': !isEditor && isCodex && !isRunning,
+        'border-green-400/[0.35]': !isEditor && !isShell && !isCodex && isRunning,
+        'border-red-400/[0.35]': !isEditor && !isShell && !isCodex && !isRunning,
       })
     : 'border-transparent'
 
@@ -107,7 +113,11 @@ export function Tab({ session, isActive, splitLabel, onClick, onClose, onRename,
         {session.pinned && (
           <span className="text-[9px] text-gold shrink-0 leading-none">★</span>
         )}
-        {isShell ? (
+        {isEditor ? (
+          <span className="text-[10px] text-amber-300 shrink-0 leading-none opacity-90">
+            {isDirty ? '●' : '◯'}
+          </span>
+        ) : isShell ? (
           <span className="text-[10px] text-blue-400 shrink-0 leading-none opacity-80">$</span>
         ) : (
           <span className="text-[11px] shrink-0 leading-none">
